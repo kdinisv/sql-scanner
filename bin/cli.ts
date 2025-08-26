@@ -1,5 +1,10 @@
 #!/usr/bin/env node
-import { SqlScanner } from "../src/index.js";
+
+// Динамический импорт собранного ESM-бандла, чтобы не тянуть src при сборке CLI
+async function getScanner() {
+  const mod = await import(new URL("./esm/index.js", import.meta.url).href);
+  return mod.SqlScanner as typeof import("../src/index.js").SqlScanner;
+}
 
 async function main() {
   const url = process.argv[2];
@@ -9,6 +14,7 @@ async function main() {
   }
 
   const useJs = !process.argv.includes("--no-js");
+  const SqlScanner = await getScanner();
   const scanner = new SqlScanner({
     requestTimeoutMs: 10000,
     timeThresholdMs: 3000,

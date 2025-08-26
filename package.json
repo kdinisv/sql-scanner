@@ -19,8 +19,15 @@
     }
   },
   "bin": {
-    "sql-scan": "./dist/cli.js"
+    "sql-scan": "./dist/bin/cli.js"
   },
+  "files": [
+    "dist/esm/**",
+    "dist/cjs/**",
+    "dist/bin/cli.js",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "npm run build:esm && npm run build:cjs && npm run build:cli && npm run rename-cjs && npm run fix-cjs-imports",
     "build:esm": "tsc -p tsconfig.json",
