@@ -67,11 +67,13 @@ console.log(smart.crawledPages, smart.candidates.length, smart.sqli.length);
   - target: string, method?: "GET"|"POST"
   - jsonBody?: Record<string,unknown>
   - enable?: { query|path|form|json|header|cookie|error|boolean|time?: boolean }
+  - payloads?: { error?: string[]; boolean?: { true:string; false:string; label?:string }[]; time?: { p:string; label?:string }[] }
   - Возвращает: { vulnerable: boolean; details: Detail[] }
 
 - smartScan(options)
   - baseUrl: string, maxDepth?: number, maxPages?: number
   - sameOriginOnly?: boolean, usePlaywright?: boolean
+  - techniques?: { error?: boolean; boolean?: boolean; time?: boolean }
   - Возвращает: { crawledPages: number; candidates: DiscoveredTarget[]; sqli: ResultShape[] }
 
 ## Возвращаемые данные
@@ -146,6 +148,32 @@ console.log(smart.crawledPages, smart.candidates.length, smart.sqli.length);
     }
   ]
 }
+```
+
+## Тонкая настройка
+
+- Кастомные payload’ы для scan
+
+```ts
+await scanner.scan({
+  target: "http://127.0.0.1:3000/rest/products/search?q=",
+  enable: { query: true, error: true, boolean: true, time: false },
+  payloads: {
+    error: ["'", "' OR 1=1--", "' UNION SELECT 1--"],
+    boolean: [{ true: "' OR 1=1--", false: "' OR 1=2--", label: "or_comment" }],
+  },
+});
+```
+
+- Управление техниками в smartScan
+
+```ts
+await scanner.smartScan({
+  baseUrl: "https://example.com",
+  maxDepth: 2,
+  maxPages: 50,
+  techniques: { error: true, boolean: true, time: false },
+});
 ```
 
 ## CLI (опционально)

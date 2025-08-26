@@ -85,6 +85,7 @@ export async function smartScan(
     usePlaywright = true,
     headers,
     cookies,
+    techniques,
   } = opts;
   console.warn("[!] Use only with permission.");
   const client = buildClient(requestTimeoutMs, headers, cookies);
@@ -154,9 +155,9 @@ export async function smartScan(
             json: false,
             header: false,
             cookie: false,
-            error: true,
-            boolean: true,
-            time: true,
+            error: techniques?.error ?? true,
+            boolean: techniques?.boolean ?? true,
+            time: techniques?.time ?? true,
           },
         })
       );
@@ -175,9 +176,9 @@ export async function smartScan(
             json: false,
             header: false,
             cookie: false,
-            error: true,
-            boolean: true,
-            time: true,
+            error: techniques?.error ?? true,
+            boolean: techniques?.boolean ?? true,
+            time: techniques?.time ?? true,
           },
         })
       );
@@ -199,9 +200,9 @@ export async function smartScan(
             json: enableJson,
             header: false,
             cookie: false,
-            error: true,
-            boolean: true,
-            time: true,
+            error: techniques?.error ?? true,
+            boolean: techniques?.boolean ?? true,
+            time: techniques?.time ?? true,
           },
         })
       );

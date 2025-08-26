@@ -28,6 +28,11 @@ export type ScanInput = {
   enable: Partial<
     Record<InjectionKind | "error" | "boolean" | "time", boolean>
   >;
+  payloads?: {
+    error?: string[];
+    boolean?: Array<{ true: string; false: string; label?: string }>;
+    time?: Array<{ p: string; label?: string }>;
+  };
 };
 
 export type Detail = {
@@ -57,6 +62,11 @@ export type SmartScanOptions = {
   playwrightMaxPages?: number;
   headers?: Record<string, string>;
   cookies?: Record<string, string>;
+  techniques?: {
+    error?: boolean;
+    boolean?: boolean;
+    time?: boolean;
+  };
 };
 
 export type DiscoveredTarget =

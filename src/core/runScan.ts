@@ -95,7 +95,8 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
 
         // error
         if (enable.error ?? true) {
-          for (const p of errorPayloads) {
+          const errs = input.payloads?.error ?? errorPayloads;
+          for (const p of errs) {
             const t0 = Date.now();
             const res = await sendWithInjection(client, input, point, p, forms);
             const elapsed = Date.now() - t0;
@@ -122,7 +123,8 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
 
         // boolean
         if (enable.boolean ?? true) {
-          for (const pair of booleanPairs) {
+          const pairs = input.payloads?.boolean ?? booleanPairs;
+          for (const pair of pairs) {
             const resT = await sendWithInjection(
               client,
               input,
@@ -143,8 +145,19 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
             const simBaseF = similaritySignal(baseText, b);
             const simTF = similaritySignal(a, b);
             const bothOk = resT.status < 500 && resF.status < 500;
+            // Для JSON эндпойнтов допускаем различие в длине/полях как сигнал
+            const isJson =
+              (resT.headers["content-type"] || "").includes(
+                "application/json"
+              ) ||
+              (resF.headers["content-type"] || "").includes("application/json");
+            const lenDelta =
+              Math.abs(a.length - b.length) / Math.max(1, baseText.length);
+            const jsonSignal = isJson && lenDelta > 0.15;
             const vuln =
-              bothOk && simTF < 0.6 && Math.abs(simBaseT - simBaseF) > 0.25;
+              bothOk &&
+              ((simTF < 0.6 && Math.abs(simBaseT - simBaseF) > 0.25) ||
+                jsonSignal);
             details.push({
               point,
               payload: `${pair.true} | ${pair.false}`,
@@ -162,7 +175,7 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
                     2
                   )} sim(true,false)=${simTF.toFixed(2)}`
                 : undefined,
-              confirmations: vuln ? [pair.label] : undefined,
+              confirmations: vuln && pair.label ? [pair.label] : undefined,
             });
             if (vuln) break;
             await sleep(jitter());
@@ -171,7 +184,8 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
 
         // time
         if (enable.time ?? true) {
-          for (const t of timePayloads) {
+          const times = input.payloads?.time ?? timePayloads;
+          for (const t of times) {
             const t0 = Date.now();
             const res = await sendWithInjection(
               client,
@@ -197,7 +211,7 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
                 location: String(res.headers["location"] || ""),
               },
               evidence: `elapsed_ms=${elapsed}`,
-              confirmations: vuln ? [t.label] : undefined,
+              confirmations: vuln && t.label ? [t.label] : undefined,
             });
             if (vuln) break;
             await sleep(jitter());
