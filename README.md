@@ -74,6 +74,80 @@ console.log(smart.crawledPages, smart.candidates.length, smart.sqli.length);
   - sameOriginOnly?: boolean, usePlaywright?: boolean
   - Возвращает: { crawledPages: number; candidates: DiscoveredTarget[]; sqli: ResultShape[] }
 
+## Возвращаемые данные
+
+### scan(input) → ResultShape
+
+- vulnerable: boolean — есть ли подтвержденные уязвимости среди проверок
+- details: Detail[] — записи по каждому проверенному «поинту/технике»
+  - point: { kind: "query"|"path"|"form"|"json"|"header"|"cookie"; name: string; meta?: object }
+  - technique: "error" | "boolean_truefalse" | "time"
+  - payload: string — инъекция, использованная в проверке
+  - vulnerable: boolean — результат конкретной проверки
+  - responseMeta?: { status: number; elapsedMs?: number; len?: number; location?: string }
+  - evidence?: string — краткая улика (фрагмент ошибки/метрика)
+  - confirmations?: string[] — ярлыки подтверждений (например, "error_signature")
+
+Пример:
+
+```json
+{
+  "vulnerable": true,
+  "details": [
+    {
+      "point": { "kind": "query", "name": "q" },
+      "technique": "error",
+      "payload": "' OR '1'='1",
+      "vulnerable": true,
+      "responseMeta": { "status": 200, "len": 12345, "elapsedMs": 120 },
+      "evidence": "You have an error in your SQL syntax",
+      "confirmations": ["error_signature"]
+    }
+  ]
+}
+```
+
+Совет: фильтруйте `details.filter(d => d.vulnerable)` для списка подтвержденных находок.
+
+### smartScan(options) → SmartScanResult
+
+- crawledPages: number — сколько страниц обработано краулером
+- candidates: DiscoveredTarget[] — найденные цели для сканирования
+  - { kind: "url-with-query"; url: string }
+  - { kind: "form"; action: string; method: "GET"|"POST"; enctype?: string; fields: { name: string; value: string }[] }
+  - { kind: "json-endpoint"; url: string; method: "GET"|"POST"|"PUT"|"PATCH"|"DELETE"; body?: any; headers?: Record<string,string> }
+- sqli: ResultShape[] — результаты сканирования для каждой из целей
+
+Пример:
+
+```json
+{
+  "crawledPages": 12,
+  "candidates": [
+    { "kind": "url-with-query", "url": "https://site/search?q=" },
+    {
+      "kind": "form",
+      "action": "https://site/login",
+      "method": "POST",
+      "fields": [{ "name": "email", "value": "" }]
+    }
+  ],
+  "sqli": [
+    {
+      "vulnerable": false,
+      "details": [
+        {
+          "point": { "kind": "query", "name": "q" },
+          "technique": "boolean_truefalse",
+          "payload": "...",
+          "vulnerable": false
+        }
+      ]
+    }
+  ]
+}
+```
+
 ## CLI (опционально)
 
 Запуск без установки:
