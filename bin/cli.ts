@@ -28,6 +28,34 @@ async function main() {
     maxDepth: 2,
     maxPages: 50,
     sameOriginOnly: true,
+    onProgress: (p: any) => {
+      const fmt = (ms?: number) =>
+        ms === undefined ? "?" : `${Math.ceil(ms / 1000)}s`;
+      if (p.kind === "smart") {
+        if (p.phase === "crawl") {
+          process.stdout.write(
+            `\r[crawl] ${p.crawledPages ?? 0}/${p.maxPages ?? "?"} pages...   `
+          );
+        } else if (p.phase === "scan") {
+          const done = p.scanProcessed ?? 0;
+          const total = p.scanTotal ?? 0;
+          process.stdout.write(
+            `\r[scan] ${done}/${total} candidates, eta ${fmt(p.etaMs)}      `
+          );
+        } else if (p.phase === "done") {
+          process.stdout.write(
+            "\r[done]                                             \n"
+          );
+        }
+      }
+      if (p.kind === "scan" && p.phase === "scan") {
+        const done = p.processedChecks ?? 0;
+        const total = p.plannedChecks ?? 0;
+        process.stdout.write(
+          `\r[checks] ${done}/${total}, eta ${fmt(p.etaMs)}               `
+        );
+      }
+    },
   });
 
   const vulns = res.sqli

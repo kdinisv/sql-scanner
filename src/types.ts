@@ -15,6 +15,27 @@ export type InjectionPoint = {
   meta?: Record<string, unknown>;
 };
 
+// Progress reporting
+export type ScanProgress = {
+  kind: "scan";
+  phase: "discover" | "scan" | "done";
+  points?: number;
+  plannedChecks?: number;
+  processedChecks?: number;
+  etaMs?: number;
+};
+
+export type SmartScanProgress = {
+  kind: "smart";
+  phase: "crawl" | "scan" | "done";
+  crawledPages?: number;
+  maxPages?: number;
+  candidatesFound?: number;
+  scanProcessed?: number;
+  scanTotal?: number;
+  etaMs?: number;
+};
+
 export type ScanInput = {
   target: string;
   method?: Method;
@@ -33,6 +54,7 @@ export type ScanInput = {
     boolean?: Array<{ true: string; false: string; label?: string }>;
     time?: Array<{ p: string; label?: string }>;
   };
+  onProgress?: (p: ScanProgress) => void;
 };
 
 export type Detail = {
@@ -67,6 +89,7 @@ export type SmartScanOptions = {
     boolean?: boolean;
     time?: boolean;
   };
+  onProgress?: (p: SmartScanProgress) => void;
 };
 
 export type DiscoveredTarget =

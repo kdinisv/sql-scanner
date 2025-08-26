@@ -67,6 +67,7 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
     points = points.slice(0, Math.max(1, Math.floor(maxRequests / 6)));
 
   const details: Detail[] = [];
+  const report = input.onProgress;
   let active = 0;
   const tasks: Promise<void>[] = [];
   async function runTask(fn: () => Promise<void>) {
@@ -78,6 +79,21 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
       active--;
     }
   }
+
+  // Report discovery
+  report?.({ kind: "scan", phase: "discover", points: points.length });
+
+  // Estimate planned checks
+  const errs = input.payloads?.error ?? errorPayloads;
+  const pairs = input.payloads?.boolean ?? booleanPairs;
+  const times = input.payloads?.time ?? timePayloads;
+  const perPoint =
+    (enable.error ?? true ? errs.length : 0) +
+    (enable.boolean ?? true ? pairs.length : 0) +
+    (enable.time ?? true ? times.length : 0);
+  const plannedChecks = perPoint * points.length;
+  let processed = 0;
+  const tStart = Date.now();
 
   for (const point of points) {
     tasks.push(
@@ -115,6 +131,19 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
               },
               evidence: isErr ? clip(text) : undefined,
               confirmations: isErr ? ["error_signature"] : undefined,
+            });
+            processed++;
+            const avg = (Date.now() - tStart) / Math.max(1, processed);
+            const eta =
+              plannedChecks > 0
+                ? Math.max(0, Math.round(avg * (plannedChecks - processed)))
+                : undefined;
+            report?.({
+              kind: "scan",
+              phase: "scan",
+              plannedChecks,
+              processedChecks: processed,
+              etaMs: eta,
             });
             if (isErr) break;
             await sleep(jitter());
@@ -177,6 +206,19 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
                 : undefined,
               confirmations: vuln && pair.label ? [pair.label] : undefined,
             });
+            processed++;
+            const avg = (Date.now() - tStart) / Math.max(1, processed);
+            const eta =
+              plannedChecks > 0
+                ? Math.max(0, Math.round(avg * (plannedChecks - processed)))
+                : undefined;
+            report?.({
+              kind: "scan",
+              phase: "scan",
+              plannedChecks,
+              processedChecks: processed,
+              etaMs: eta,
+            });
             if (vuln) break;
             await sleep(jitter());
           }
@@ -213,6 +255,19 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
               evidence: `elapsed_ms=${elapsed}`,
               confirmations: vuln && t.label ? [t.label] : undefined,
             });
+            processed++;
+            const avg = (Date.now() - tStart) / Math.max(1, processed);
+            const eta =
+              plannedChecks > 0
+                ? Math.max(0, Math.round(avg * (plannedChecks - processed)))
+                : undefined;
+            report?.({
+              kind: "scan",
+              phase: "scan",
+              plannedChecks,
+              processedChecks: processed,
+              etaMs: eta,
+            });
             if (vuln) break;
             await sleep(jitter());
           }
@@ -222,5 +277,12 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
   }
 
   await Promise.all(tasks);
+  report?.({
+    kind: "scan",
+    phase: "done",
+    plannedChecks,
+    processedChecks: processed,
+    etaMs: 0,
+  });
   return { vulnerable: details.some((d) => d.vulnerable), details };
 }

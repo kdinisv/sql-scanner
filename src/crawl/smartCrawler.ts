@@ -88,6 +88,7 @@ export async function smartScan(
     techniques,
   } = opts;
   console.warn("[!] Use only with permission.");
+  const onP = opts.onProgress;
   const client = buildClient(requestTimeoutMs, headers, cookies);
   const origin = new NodeURL(baseUrl).origin;
   const q: Array<{ url: string; depth: number }> = [{ url: baseUrl, depth: 0 }];
@@ -114,6 +115,7 @@ export async function smartScan(
       if (depth + 1 <= maxDepth)
         q.push({ url: u.toString(), depth: depth + 1 });
     }
+    onP?.({ kind: "smart", phase: "crawl", crawledPages: crawled, maxPages });
   }
 
   if (usePlaywright) {
@@ -139,6 +141,13 @@ export async function smartScan(
   });
 
   const sqliResults: ResultShape[] = [];
+  onP?.({
+    kind: "smart",
+    phase: "scan",
+    candidatesFound: uniqueCandidates.length,
+    scanProcessed: 0,
+    scanTotal: uniqueCandidates.length,
+  });
   for (const c of uniqueCandidates) {
     if (c.kind === "url-with-query") {
       sqliResults.push(
@@ -158,6 +167,23 @@ export async function smartScan(
             error: techniques?.error ?? true,
             boolean: techniques?.boolean ?? true,
             time: techniques?.time ?? true,
+          },
+          onProgress: (p) => {
+            if (p.phase === "done") {
+              const done =
+                sqliResults.length + 1 > uniqueCandidates.length
+                  ? uniqueCandidates.length
+                  : sqliResults.length + 1;
+              const remaining = Math.max(0, uniqueCandidates.length - done);
+              onP?.({
+                kind: "smart",
+                phase: "scan",
+                candidatesFound: uniqueCandidates.length,
+                scanProcessed: done,
+                scanTotal: uniqueCandidates.length,
+                etaMs: remaining * (p.etaMs ?? 0),
+              });
+            }
           },
         })
       );
@@ -179,6 +205,23 @@ export async function smartScan(
             error: techniques?.error ?? true,
             boolean: techniques?.boolean ?? true,
             time: techniques?.time ?? true,
+          },
+          onProgress: (p) => {
+            if (p.phase === "done") {
+              const done =
+                sqliResults.length + 1 > uniqueCandidates.length
+                  ? uniqueCandidates.length
+                  : sqliResults.length + 1;
+              const remaining = Math.max(0, uniqueCandidates.length - done);
+              onP?.({
+                kind: "smart",
+                phase: "scan",
+                candidatesFound: uniqueCandidates.length,
+                scanProcessed: done,
+                scanTotal: uniqueCandidates.length,
+                etaMs: remaining * (p.etaMs ?? 0),
+              });
+            }
           },
         })
       );
@@ -204,11 +247,36 @@ export async function smartScan(
             boolean: techniques?.boolean ?? true,
             time: techniques?.time ?? true,
           },
+          onProgress: (p) => {
+            if (p.phase === "done") {
+              const done =
+                sqliResults.length + 1 > uniqueCandidates.length
+                  ? uniqueCandidates.length
+                  : sqliResults.length + 1;
+              const remaining = Math.max(0, uniqueCandidates.length - done);
+              onP?.({
+                kind: "smart",
+                phase: "scan",
+                candidatesFound: uniqueCandidates.length,
+                scanProcessed: done,
+                scanTotal: uniqueCandidates.length,
+                etaMs: remaining * (p.etaMs ?? 0),
+              });
+            }
+          },
         })
       );
     }
   }
 
+  onP?.({
+    kind: "smart",
+    phase: "done",
+    candidatesFound: uniqueCandidates.length,
+    scanProcessed: uniqueCandidates.length,
+    scanTotal: uniqueCandidates.length,
+    etaMs: 0,
+  });
   return {
     crawledPages: visited.size,
     candidates: uniqueCandidates,

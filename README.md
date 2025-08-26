@@ -68,12 +68,14 @@ console.log(smart.crawledPages, smart.candidates.length, smart.sqli.length);
   - jsonBody?: Record<string,unknown>
   - enable?: { query|path|form|json|header|cookie|error|boolean|time?: boolean }
   - payloads?: { error?: string[]; boolean?: { true:string; false:string; label?:string }[]; time?: { p:string; label?:string }[] }
+  - onProgress?: (p: ScanProgress) => void
   - Возвращает: { vulnerable: boolean; details: Detail[] }
 
 - smartScan(options)
   - baseUrl: string, maxDepth?: number, maxPages?: number
   - sameOriginOnly?: boolean, usePlaywright?: boolean
   - techniques?: { error?: boolean; boolean?: boolean; time?: boolean }
+  - onProgress?: (p: SmartScanProgress) => void
   - Возвращает: { crawledPages: number; candidates: DiscoveredTarget[]; sqli: ResultShape[] }
 
 ## Возвращаемые данные
@@ -176,6 +178,43 @@ await scanner.smartScan({
 });
 ```
 
+## Прогресс и ETA
+
+- Прогресс для точечного сканирования
+
+```ts
+await scanner.scan({
+  target: "https://example.com/search?q=1",
+  enable: { query: true, error: true, boolean: true, time: false },
+  onProgress: (p) => {
+    if (p.phase === "discover") {
+      console.log(`points=${p.points}`);
+    } else if (p.phase === "scan") {
+      console.log(
+        `checks ${p.processedChecks}/${p.plannedChecks}, eta=${p.etaMs}ms`
+      );
+    }
+  },
+});
+```
+
+- Прогресс для умного сканирования (краулинг + скан)
+
+```ts
+await scanner.smartScan({
+  baseUrl: "https://example.com",
+  onProgress: (p) => {
+    if (p.phase === "crawl") {
+      console.log(`crawled ${p.crawledPages}/${p.maxPages}`);
+    } else if (p.phase === "scan") {
+      console.log(
+        `scanned ${p.scanProcessed}/${p.scanTotal}, eta=${p.etaMs}ms`
+      );
+    }
+  },
+});
+```
+
 ## CLI (опционально)
 
 Запуск без установки:
@@ -190,6 +229,8 @@ npx --package @kdinisv/sql-scanner sql-scan https://example.com
 npm i -g @kdinisv/sql-scanner
 sql-scan https://example.com
 ```
+
+CLI показывает индикатор прогресса и оценку ETA в процессе.
 
 ## Важно
 
