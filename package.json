@@ -1,0 +1,67 @@
+{
+  "name": "@kdinisv/sql-scanner",
+  "version": "0.1.0",
+  "description": "Smart SQL injection scanner with crawler and optional Playwright capture.",
+  "type": "module",
+  "main": "dist/cjs/index.cjs",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.cjs"
+      }
+    }
+  },
+  "bin": {
+    "sql-scan": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && npm run build:cli && npm run rename-cjs && npm run fix-cjs-imports",
+    "build:esm": "tsc -p tsconfig.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:cli": "tsc -p tsconfig.cli.json",
+    "rename-cjs": "node scripts/rename-cjs.mjs",
+    "fix-cjs-imports": "node scripts/fix-cjs-imports.mjs",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "cheerio": "^1.0.0-rc.12"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.48.0"
+  },
+  "devDependencies": {
+    "@types/cheerio": "^0.22.35",
+    "@types/node": "^20.14.10",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kdinisv/sql-scanner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kdinisv/sql-scanner/issues"
+  },
+  "homepage": "https://github.com/kdinisv/sql-scanner#readme",
+  "keywords": [
+    "security",
+    "sql-injection",
+    "scanner",
+    "vulnerability",
+    "crawler",
+    "testing"
+  ]
+}
