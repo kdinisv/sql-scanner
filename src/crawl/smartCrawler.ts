@@ -29,7 +29,9 @@ async function discoverWithPlaywright(
   try {
     const context = await browser.newContext();
     const maxPages = opts.playwrightMaxPages ?? Math.min(10, startUrls.length);
-    const pagesToVisit = startUrls.slice(0, maxPages);
+    // фильтруем только http/https
+    const httpOnly = startUrls.filter((u) => /^https?:/i.test(u));
+    const pagesToVisit = httpOnly.slice(0, maxPages);
     for (const url of pagesToVisit) {
       const page = await context.newPage();
       page.on("request", (req: any) => {
@@ -63,9 +65,19 @@ async function discoverWithPlaywright(
           });
         } catch {}
       });
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
-      await page.waitForTimeout(1500);
-      await page.close();
+      // пропускаем не-HTTP(S) даже если каким-то образом просочились
+      if (!/^https?:/i.test(url)) {
+        await page.close();
+        continue;
+      }
+      try {
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
+        await page.waitForTimeout(1500);
+      } catch {
+        // игнорируем ошибки навигации (например, abort на mailto:)
+      } finally {
+        await page.close();
+      }
     }
   } finally {
     await browser.close();
