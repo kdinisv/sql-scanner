@@ -167,6 +167,48 @@ await scanner.scan({
 });
 ```
 
+- Предварительная авторизация (форма/JSON)
+
+```ts
+await scanner.scan({
+  target: "http://127.0.0.1:8080/vulnerabilities/sqli/?id=1&Submit=Submit",
+  method: "GET",
+  auth: {
+    url: "http://127.0.0.1:8080/login.php",
+    method: "POST",
+    type: "form-urlencoded",
+    usernameField: "username",
+    passwordField: "password",
+    username: "admin",
+    password: "password",
+    additionalFields: { Login: "Login" },
+    verifyUrl: "http://127.0.0.1:8080/index.php",
+    success: { notContainsText: "Login" },
+  },
+  enable: { query: true, error: true, boolean: true },
+});
+```
+
+Аналогично в smartScan:
+
+```ts
+await scanner.smartScan({
+  baseUrl: "http://127.0.0.1:8080",
+  auth: {
+    url: "http://127.0.0.1:8080/login.php",
+    method: "POST",
+    type: "form-urlencoded",
+    usernameField: "username",
+    passwordField: "password",
+    username: "admin",
+    password: "password",
+    additionalFields: { Login: "Login" },
+    verifyUrl: "http://127.0.0.1:8080/index.php",
+    success: { notContainsText: "Login" },
+  },
+});
+```
+
 - Управление техниками в smartScan
 
 ```ts

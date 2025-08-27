@@ -101,7 +101,14 @@ export async function smartScan(
   } = opts;
   console.warn("[!] Use only with permission.");
   const onP = opts.onProgress;
-  const client = buildClient(requestTimeoutMs, headers, cookies);
+  // Perform optional auth first and use resulting headers/cookies for crawling
+  const authClient = buildClient(requestTimeoutMs, headers, cookies);
+  const authResult = await (
+    await import("../utils.js")
+  ).performAuth(authClient, opts.auth);
+  const mergedHeaders = { ...(headers || {}), ...(authResult?.headers || {}) };
+  const mergedCookies = { ...(cookies || {}), ...(authResult?.cookies || {}) };
+  const client = buildClient(requestTimeoutMs, mergedHeaders, mergedCookies);
   const origin = new NodeURL(baseUrl).origin;
   const q: Array<{ url: string; depth: number }> = [{ url: baseUrl, depth: 0 }];
   const visited = new Set<string>();
@@ -166,8 +173,8 @@ export async function smartScan(
         await runScan({
           target: c.url,
           method: "GET",
-          headers,
-          cookies,
+          headers: mergedHeaders,
+          cookies: mergedCookies,
           requestTimeoutMs,
           enable: {
             query: true,
@@ -204,8 +211,8 @@ export async function smartScan(
         await runScan({
           target: c.action,
           method: c.method,
-          headers,
-          cookies,
+          headers: mergedHeaders,
+          cookies: mergedCookies,
           requestTimeoutMs,
           enable: {
             query: false,
@@ -243,8 +250,8 @@ export async function smartScan(
         await runScan({
           target: c.url,
           method: c.method === "GET" || c.method === "POST" ? c.method : "POST",
-          headers: { ...headers, ...(c.headers || {}) },
-          cookies,
+          headers: { ...mergedHeaders, ...(c.headers || {}) },
+          cookies: mergedCookies,
           jsonBody:
             enableJson && typeof c.body === "object" ? c.body : undefined,
           requestTimeoutMs,

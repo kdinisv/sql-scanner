@@ -22,6 +22,7 @@ import {
   bodyToText,
   extractTitle,
   sendWithInjection,
+  performAuth,
 } from "../utils.js";
 
 export async function runScan(input: ScanInput): Promise<ResultShape> {
@@ -30,6 +31,7 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
     jsonBody,
     headers,
     cookies,
+    auth,
     timeThresholdMs = 2500,
     requestTimeoutMs = 10000,
     parallel = 4,
@@ -37,7 +39,12 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
     enable = {},
   } = input;
   console.warn("[!] Use only with permission.");
-  const client = buildClient(requestTimeoutMs, headers, cookies);
+  // If auth is provided, run it and merge cookies/headers
+  const authClient = buildClient(requestTimeoutMs, headers, cookies);
+  const authResult = await performAuth(authClient, auth);
+  const mergedHeaders = { ...(headers || {}), ...(authResult?.headers || {}) };
+  const mergedCookies = { ...(cookies || {}), ...(authResult?.cookies || {}) };
+  const client = buildClient(requestTimeoutMs, mergedHeaders, mergedCookies);
   const rootUrl = new URL(target);
 
   let points: InjectionPoint[] = [];

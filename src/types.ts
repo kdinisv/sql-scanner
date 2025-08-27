@@ -42,6 +42,7 @@ export type ScanInput = {
   jsonBody?: Record<string, unknown>;
   headers?: Record<string, string>;
   cookies?: Record<string, string>;
+  auth?: AuthOptions; // optional pre-scan authentication
   timeThresholdMs?: number;
   requestTimeoutMs?: number;
   parallel?: number;
@@ -84,6 +85,7 @@ export type SmartScanOptions = {
   playwrightMaxPages?: number;
   headers?: Record<string, string>;
   cookies?: Record<string, string>;
+  auth?: AuthOptions; // optional pre-scan authentication before crawling
   techniques?: {
     error?: boolean;
     boolean?: boolean;
@@ -113,4 +115,24 @@ export type SmartScanResult = {
   crawledPages: number;
   candidates: DiscoveredTarget[];
   sqli: ResultShape[];
+};
+
+// Authentication options for pre-scan login
+export type AuthOptions = {
+  url: string; // where to submit the login form
+  method: Method; // GET or POST
+  type: "form-urlencoded" | "json"; // how to send credentials
+  usernameField: string; // field name for username
+  passwordField: string; // field name for password
+  username: string; // value for username
+  password: string; // value for password
+  additionalFields?: Record<string, string>; // e.g., { Login: "Login" }
+  headers?: Record<string, string>; // extra headers for login request
+  verifyUrl?: string; // optional URL to hit after login to validate session
+  success?: {
+    status?: number; // expected HTTP status
+    containsText?: string; // expected substring in body to signal success
+    notContainsText?: string; // substring that should NOT be present (e.g., "Login")
+    redirectLocationIncludes?: string; // substring expected in Location header
+  };
 };

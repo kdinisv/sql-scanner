@@ -10,6 +10,7 @@ import type {
   ScanInput,
   DiscoveredTarget,
   Method,
+  AuthOptions,
 } from "./types.js";
 
 // HTTP client utilities
@@ -37,6 +38,106 @@ export function buildClient(
     validateStatus: () => true, // Don't throw on HTTP errors
     maxRedirects: 5,
   });
+}
+
+// Merge cookie jars utility
+export function mergeCookies(
+  base?: Record<string, string>,
+  extra?: Record<string, string>
+): Record<string, string> | undefined {
+  if (!base && !extra) return undefined;
+  return { ...(base || {}), ...(extra || {}) };
+}
+
+// Perform pre-scan authentication if requested
+export async function performAuth(
+  client: AxiosInstance,
+  auth?: AuthOptions
+): Promise<{
+  headers?: Record<string, string>;
+  cookies?: Record<string, string>;
+} | null> {
+  if (!auth) return null;
+  try {
+    const headers: Record<string, string> = { ...(auth.headers || {}) };
+    let data: any = undefined;
+    if (auth.method === "POST") {
+      if (auth.type === "form-urlencoded") {
+        const form = new URLSearchParams();
+        form.set(auth.usernameField, auth.username);
+        form.set(auth.passwordField, auth.password);
+        if (auth.additionalFields) {
+          for (const [k, v] of Object.entries(auth.additionalFields))
+            form.set(k, v);
+        }
+        data = form;
+        headers["Content-Type"] = "application/x-www-form-urlencoded";
+      } else if (auth.type === "json") {
+        const body: Record<string, string> = {
+          [auth.usernameField]: auth.username,
+          [auth.passwordField]: auth.password,
+          ...(auth.additionalFields || {}),
+        };
+        data = body;
+        headers["Content-Type"] = "application/json";
+      }
+    }
+
+    const res = await client.request({
+      url: auth.url,
+      method: auth.method,
+      headers,
+      data,
+      maxRedirects: 0,
+      validateStatus: () => true,
+    });
+
+    // Collect cookies from Set-Cookie
+    const cookieJar: Record<string, string> = {};
+    const set = (res.headers["set-cookie"] as string[] | undefined) || [];
+    for (const c of set) {
+      const [kv] = c.split(";");
+      const [k, v] = kv.split("=");
+      if (k && v !== undefined) cookieJar[k.trim()] = v.trim();
+    }
+
+    // Optional verify
+    if (auth.verifyUrl) {
+      const verifyRes = await client.get(auth.verifyUrl, {
+        headers: {
+          ...headers,
+          Cookie: Object.entries(cookieJar)
+            .map(([k, v]) => `${k}=${v}`)
+            .join("; "),
+        },
+        validateStatus: () => true,
+      });
+      const bodyText = bodyToText(verifyRes);
+      const okStatus = auth.success?.status
+        ? verifyRes.status === auth.success.status
+        : true;
+      const hasText = auth.success?.containsText
+        ? bodyText.includes(auth.success.containsText)
+        : true;
+      const notHasText = auth.success?.notContainsText
+        ? !bodyText.includes(auth.success.notContainsText)
+        : true;
+      const redirectOk = auth.success?.redirectLocationIncludes
+        ? String(verifyRes.headers["location"] || "").includes(
+            auth.success.redirectLocationIncludes
+          )
+        : true;
+      const success = okStatus && hasText && notHasText && redirectOk;
+      if (!success) {
+        // still return cookies to give scanner a chance
+        return { headers, cookies: cookieJar };
+      }
+    }
+
+    return { headers, cookies: cookieJar };
+  } catch {
+    return null;
+  }
 }
 
 // Injection point discovery

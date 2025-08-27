@@ -1,10 +1,18 @@
-version: "3.8"
 services:
-  juice-shop:
-    image: bkimminich/juice-shop:latest
-    container_name: juice-shop
+  dvwa:
+    image: vulnerables/web-dvwa
     ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
+      - "127.0.0.1:8080:80"
+    restart: unless-stopped
+
+  bwapp:
+    image: raesene/bwapp
+    ports:
+      - "127.0.0.1:8081:80"
+    restart: unless-stopped
+
+  vampi:
+    image: erev0s/vampi
+    ports:
+      - "127.0.0.1:5000:5000"
     restart: unless-stopped
