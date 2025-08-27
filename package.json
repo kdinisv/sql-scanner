@@ -1,6 +1,6 @@
 {
   "name": "@kdinisv/sql-scanner",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Smart SQL injection scanner with crawler and optional Playwright capture.",
   "type": "module",
   "main": "dist/cjs/index.cjs",
