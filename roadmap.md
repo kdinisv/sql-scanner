@@ -4,18 +4,21 @@
 
 - [x] Выбор стека (Node.js TS или Python).
 - [ ] CLI (scan, report, help), .env-конфиги.
-- [ ] HTTP-драйвер (timeout/retry/proxy, cookie/JWT).
+	- [x] scan (умное сканирование в CLI, exit codes)
+	- [x] report (флаги --report md|json, --out)
+	- [ ] help/usage, .env-конфиг
+- [x] HTTP-драйвер (timeout/retry/proxy, cookie/JWT). (timeouts, короткие ретраи с backoff для GET, поддержка HTTP(S)_PROXY, cookies/JWT через заголовки)
 - [x] Базовый Boolean-based детектор.
-- [ ] JSON + Markdown отчёт.
+- [x] JSON + Markdown отчёт. (SDK-хелперы + CLI сохранение)
 - [x] Локальные эмуляторы СУБД для тестов (MySQL/Postgres/MSSQL/Oracle/SQLite).
 
 ## Этап 2. Расширение техник и СУБД (4–6 недель)
 
-- [ ] Time-based + статистическая проверка.
+- [x] Time-based + статистическая проверка. (p-value подтверждение)
 - [x] Error-based (сигнатуры ошибок).
 - [ ] Union-based (подбор колонок/типов).
-- [ ] Фингерпринтинг СУБД.
-- [ ] Поддержка MySQL, PostgreSQL, MSSQL, Oracle, SQLite.
+- [x] Фингерпринтинг СУБД. (базовый по текстам ошибок/пейлоадам)
+- [x] Поддержка MySQL, PostgreSQL, MSSQL, Oracle, SQLite. (уровень детекта/отпечатков и эмуляторов)
 
 ## Этап 3. Кроулинг и спецификации (3–4 недели)
 
@@ -26,14 +29,14 @@
 
 ## Этап 4. Подтверждение и снижение FP (2–3 недели)
 
-- [ ] Time-based p-value.
+- [x] Time-based p-value.
 - [ ] Хэши/длина/маркеры.
 - [ ] Confidence-скоринг.
 - [ ] Дедупликация находок.
 
 ## Этап 5. Отчёты и CI/CD (3–4 недели)
 
-- [ ] SARIF, Markdown/PDF.
+- [ ] SARIF, Markdown/PDF. (Markdown уже реализован, PDF в планах)
 - [ ] CSV, JUnit.
 - [x] Exit codes (0/1/2).
 - [ ] Интеграции с Jira, GitHub, Slack/Telegram.
