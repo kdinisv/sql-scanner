@@ -9,14 +9,30 @@ async function getScanner() {
       mod.toJsonReport as typeof import("../src/index.js").toJsonReport,
     toMarkdownReport:
       mod.toMarkdownReport as typeof import("../src/index.js").toMarkdownReport,
+    toCsvReport:
+      mod.toCsvReport as typeof import("../src/index.js").toCsvReport,
+    toJUnitReport:
+      mod.toJUnitReport as typeof import("../src/index.js").toJUnitReport,
   };
 }
 
 async function main() {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    console.log(
+      `Usage: sql-scan <url> [--no-js] [--report json|md|csv|junit] [--out path]\n\n` +
+        `Options:\n` +
+        `  --no-js                Disable JS/SPA capture (faster)\n` +
+        `  --report <fmt>         Save report in format: json|md|csv|junit\n` +
+        `  --out <path>           Output file path for the report\n` +
+        `  -h, --help             Show this help\n`
+    );
+    process.exit(0);
+  }
+
   const url = process.argv[2];
   if (!url) {
     console.error(
-      "Usage: sql-scan <url> [--no-js] [--report json|md] [--out path]"
+      "Usage: sql-scan <url> [--no-js] [--report json|md|csv|junit] [--out path]"
     );
     process.exit(2);
   }
@@ -33,7 +49,13 @@ async function main() {
     return null;
   })();
 
-  const { SqlScanner, toJsonReport, toMarkdownReport } = await getScanner();
+  const {
+    SqlScanner,
+    toJsonReport,
+    toMarkdownReport,
+    toCsvReport,
+    toJUnitReport,
+  } = await getScanner();
   const scanner = new SqlScanner({
     requestTimeoutMs: 10000,
     timeThresholdMs: 3000,
@@ -94,8 +116,20 @@ async function main() {
     try {
       const fs = await import("node:fs/promises");
       const first = res.sqli[0] || { vulnerable: false, details: [] };
-      const content =
-        reportFmt === "md" ? toMarkdownReport(first) : toJsonReport(first);
+      let content: string;
+      switch (reportFmt) {
+        case "md":
+          content = toMarkdownReport(first);
+          break;
+        case "csv":
+          content = toCsvReport(first);
+          break;
+        case "junit":
+          content = toJUnitReport(first);
+          break;
+        default:
+          content = toJsonReport(first);
+      }
       await fs.writeFile(outPath, content, "utf8");
       console.error(`[report] saved ${reportFmt} to ${outPath}`);
     } catch (e) {

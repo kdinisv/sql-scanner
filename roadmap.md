@@ -4,10 +4,10 @@
 
 - [x] Выбор стека (Node.js TS или Python).
 - [ ] CLI (scan, report, help), .env-конфиги.
-	- [x] scan (умное сканирование в CLI, exit codes)
-	- [x] report (флаги --report md|json, --out)
-	- [ ] help/usage, .env-конфиг
-- [x] HTTP-драйвер (timeout/retry/proxy, cookie/JWT). (timeouts, короткие ретраи с backoff для GET, поддержка HTTP(S)_PROXY, cookies/JWT через заголовки)
+  - [x] scan (умное сканирование в CLI, exit codes)
+  - [x] report (флаги --report md|json, --out)
+  - [ ] help/usage, .env-конфиг
+- [x] HTTP-драйвер (timeout/retry/proxy, cookie/JWT). (timeouts, короткие ретраи с backoff для GET, поддержка HTTP(S)\_PROXY, cookies/JWT через заголовки)
 - [x] Базовый Boolean-based детектор.
 - [x] JSON + Markdown отчёт. (SDK-хелперы + CLI сохранение)
 - [x] Локальные эмуляторы СУБД для тестов (MySQL/Postgres/MSSQL/Oracle/SQLite).

@@ -34,3 +34,84 @@ export function toMarkdownReport(result: ResultShape): string {
   }
   return lines.join("\n");
 }
+
+export function toCsvReport(result: ResultShape): string {
+  const rows: string[] = [];
+  rows.push(
+    [
+      "technique",
+      "point_kind",
+      "point_name",
+      "vulnerable",
+      "status",
+      "elapsedMs",
+      "len",
+      "confirmations",
+    ].join(",")
+  );
+  for (const d of result.details) {
+    const values = [
+      d.technique,
+      d.point.kind,
+      d.point.name,
+      String(d.vulnerable),
+      String(d.responseMeta?.status ?? ""),
+      String(d.responseMeta?.elapsedMs ?? ""),
+      String(d.responseMeta?.len ?? ""),
+      (d.confirmations || []).join("; "),
+    ];
+    rows.push(values.map(csvEscape).join(","));
+  }
+  return rows.join("\n");
+}
+
+export function toJUnitReport(result: ResultShape): string {
+  const vulns = result.details.filter((d) => d.vulnerable);
+  const tests = Math.max(1, result.details.length || 1);
+  const failures = vulns.length;
+  const timeSec = (
+    result.details.reduce((a, d) => a + (d.responseMeta?.elapsedMs || 0), 0) /
+    1000
+  ).toFixed(3);
+  let xml = "";
+  xml += `<?xml version="1.0" encoding="UTF-8"?>\n`;
+  xml += `<testsuite name="sql-scanner" tests="${tests}" failures="${failures}" time="${timeSec}">\n`;
+  if (result.details.length === 0) {
+    xml += `  <testcase classname="scan" name="no_targets"/>\n`;
+  } else {
+    for (const d of result.details) {
+      const name = `${d.technique} ${d.point.kind}:${d.point.name}`;
+      const cls = `scan.${d.point.kind}`;
+      const t = (d.responseMeta?.elapsedMs || 0) / 1000;
+      xml += `  <testcase classname="${escapeXml(cls)}" name="${escapeXml(
+        name
+      )}" time="${t.toFixed(3)}">`;
+      if (d.vulnerable) {
+        const msg = d.confirmations?.join(", ") || "vulnerability";
+        const evid = d.evidence || "";
+        xml += `\n    <failure message="${escapeXml(msg)}">${escapeXml(
+          evid
+        )}</failure>\n  `;
+      }
+      xml += `</testcase>\n`;
+    }
+  }
+  xml += `</testsuite>`;
+  return xml;
+}
+
+function escapeXml(s: string): string {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function csvEscape(v: string): string {
+  const need =
+    v.includes(",") || v.includes("\n") || v.includes("\r") || v.includes('"');
+  if (!need) return v;
+  return '"' + v.replaceAll('"', '""') + '"';
+}
