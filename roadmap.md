@@ -7,6 +7,7 @@
 - [ ] HTTP-драйвер (timeout/retry/proxy, cookie/JWT).
 - [x] Базовый Boolean-based детектор.
 - [ ] JSON + Markdown отчёт.
+- [x] Локальные эмуляторы СУБД для тестов (MySQL/Postgres/MSSQL/Oracle/SQLite).
 
 ## Этап 2. Расширение техник и СУБД (4–6 недель)
 
