@@ -32,11 +32,36 @@ export function buildClient(
     defaultHeaders["Cookie"] = cookieString;
   }
 
+  // Proxy support via environment variables (HTTP(S)_PROXY)
+  let proxyCfg: any = undefined;
+  const proxyEnv =
+    process.env.HTTPS_PROXY ||
+    process.env.HTTP_PROXY ||
+    process.env.https_proxy ||
+    process.env.http_proxy;
+  if (proxyEnv) {
+    try {
+      const u = new URL(proxyEnv);
+      proxyCfg = {
+        host: u.hostname,
+        port: Number(u.port || (u.protocol === "https:" ? 443 : 80)),
+        protocol: (u.protocol || "http:").replace(":", ""),
+      } as any;
+      if (u.username) {
+        proxyCfg.auth = {
+          username: decodeURIComponent(u.username),
+          password: decodeURIComponent(u.password || ""),
+        };
+      }
+    } catch {}
+  }
+
   const client = axios.create({
     timeout: timeoutMs,
     headers: defaultHeaders,
     validateStatus: () => true, // Don't throw on HTTP errors
     maxRedirects: 5,
+    proxy: proxyCfg,
   });
 
   // Basic retry with exponential backoff for transient errors (GET only)

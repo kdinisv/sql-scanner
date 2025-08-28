@@ -90,7 +90,7 @@ console.log(smart.crawledPages, smart.candidates.length, smart.sqli.length);
   - vulnerable: boolean — результат конкретной проверки
   - responseMeta?: { status: number; elapsedMs?: number; len?: number; location?: string }
   - evidence?: string — краткая улика (фрагмент ошибки/метрика)
-  - confirmations?: string[] — ярлыки подтверждений (например, "error_signature")
+  - confirmations?: string[] — ярлыки подтверждений (например, "error_signature", а при error-based может добавляться отпечаток СУБД: "mysql"|"postgres"|"mssql"|"oracle"|"sqlite")
 
 Пример:
 
@@ -272,6 +272,10 @@ sql-scan https://example.com
 
 # отключить захват JS/SPA (без Playwright)
 sql-scan https://example.com --no-js
+
+# сохранить отчёт (Markdown или JSON)
+sql-scan https://example.com --report md --out report.md
+sql-scan https://example.com --report json --out report.json
 ```
 
 CLI показывает индикатор прогресса и оценку ETA в процессе.
@@ -294,6 +298,13 @@ CLI показывает индикатор прогресса и оценку E
 ```bash
 npm test -s
 ```
+
+## Сеть и прокси
+
+- Поддерживаются переменные окружения прокси:
+  - HTTP_PROXY / HTTPS_PROXY — адрес прокси, например: `http://127.0.0.1:3128` или с авторизацией `http://user:pass@proxy.local:8080`.
+  - NO_PROXY — список исключений через запятую (если задан системно, будет учтён на стороне среды).
+- Для транзиентных ошибок на GET (502/503/504, сетевые таймауты) вшиты короткие ретраи с экспоненциальным backoff.
 
 ## Дополнительные примеры
 
