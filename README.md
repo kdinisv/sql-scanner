@@ -340,6 +340,8 @@ const res = await scanner.scan({
 });
 ```
 
+— Встроено статистическое подтверждение (p-value) для time-based: несколько парных замеров baseline/injected, расчёт p (односторонний тест). В evidence попадают p, z, средние времена. Для шумных систем можно повысить timeThresholdMs.
+
 ### 5) smartScan с/без JS
 
 ```ts
@@ -368,6 +370,16 @@ const byTechnique = onlyVuln.reduce(
   },
   /** @type {Record<string, number>} */ {}
 );
+```
+
+— Готовые репорты: JSON/Markdown
+
+```ts
+import { toJsonReport, toMarkdownReport } from "@kdinisv/sql-scanner";
+
+const json = toJsonReport(result);
+const md = toMarkdownReport(result);
+// Сохраните в файл или отправьте в CI-артефакты
 ```
 
 ### 7) Управление нагрузкой

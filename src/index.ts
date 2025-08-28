@@ -1,6 +1,7 @@
 export * from "./types.js";
 export { runScan } from "./core/runScan.js";
 export { smartScan } from "./crawl/smartCrawler.js";
+export { toJsonReport, toMarkdownReport } from "./report.js";
 
 import type {
   ScanInput,

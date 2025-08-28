@@ -32,12 +32,63 @@ export function buildClient(
     defaultHeaders["Cookie"] = cookieString;
   }
 
-  return axios.create({
+  const client = axios.create({
     timeout: timeoutMs,
     headers: defaultHeaders,
     validateStatus: () => true, // Don't throw on HTTP errors
     maxRedirects: 5,
   });
+
+  // Basic retry with exponential backoff for transient errors (GET only)
+  const maxRetries = 2;
+  client.interceptors.response.use(
+    (res) => {
+      const transient =
+        res.status === 502 || res.status === 503 || res.status === 504;
+      const cfg: any = res.config || {};
+      const method = String(cfg.method || "GET").toUpperCase();
+      if (
+        transient &&
+        method === "GET" &&
+        (cfg._retryCount || 0) < maxRetries
+      ) {
+        cfg._retryCount = (cfg._retryCount || 0) + 1;
+        const delay =
+          200 * Math.pow(2, cfg._retryCount - 1) + Math.random() * 100;
+        return new Promise((resolve) => setTimeout(resolve, delay)).then(() =>
+          client.request(cfg)
+        );
+      }
+      return res;
+    },
+    (error) => {
+      const cfg: any = error.config || {};
+      const method = String(cfg.method || "GET").toUpperCase();
+      const code = (error.code || "").toString();
+      const transientCodes = [
+        "ECONNRESET",
+        "ETIMEDOUT",
+        "ESOCKETTIMEDOUT",
+        "EAI_AGAIN",
+        "ENOTFOUND",
+      ];
+      if (
+        method === "GET" &&
+        (cfg._retryCount || 0) < maxRetries &&
+        transientCodes.includes(code)
+      ) {
+        cfg._retryCount = (cfg._retryCount || 0) + 1;
+        const delay =
+          200 * Math.pow(2, cfg._retryCount - 1) + Math.random() * 100;
+        return new Promise((resolve) => setTimeout(resolve, delay)).then(() =>
+          client.request(cfg)
+        );
+      }
+      return Promise.reject(error);
+    }
+  );
+
+  return client;
 }
 
 // Merge cookie jars utility
@@ -423,6 +474,32 @@ export function hasSqlError(text: string): boolean {
   ];
 
   return errorPatterns.some((pattern) => pattern.test(text));
+}
+
+export function detectDbFingerprint(
+  text: string
+): "mysql" | "postgres" | "mssql" | "oracle" | "sqlite" | "unknown" {
+  const patterns: [RegExp, string][] = [
+    [/mysql.*error|warning.*mysql|valid MySQL result/i, "mysql"],
+    [
+      /PostgreSQL.*ERROR|Warning.*pg_|valid PostgreSQL result|pg_sleep/i,
+      "postgres",
+    ],
+    [
+      /SQLServer JDBC Driver|SqlException|OLE DB.*error|Unclosed quotation mark|WAITFOR\s+DELAY/i,
+      "mssql",
+    ],
+    [
+      /Oracle error|Oracle.*Driver|quoted string not properly terminated|DBMS_LOCK\.SLEEP/i,
+      "oracle",
+    ],
+    [
+      /SQLITE_ERROR|SQLite error|SQLite3::SQLException|near \".*\": syntax error|no such (table|column)/i,
+      "sqlite",
+    ],
+  ];
+  for (const [re, label] of patterns) if (re.test(text)) return label as any;
+  return "unknown";
 }
 
 export function similaritySignal(a: string, b: string): number {

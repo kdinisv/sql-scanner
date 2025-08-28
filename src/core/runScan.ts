@@ -25,6 +25,7 @@ import {
   performAuth,
   mean,
   pairedZTestPValue,
+  detectDbFingerprint,
 } from "../utils.js";
 
 export async function runScan(input: ScanInput): Promise<ResultShape> {
@@ -127,6 +128,7 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
             const elapsed = Date.now() - t0;
             const text = bodyToText(res);
             const isErr = hasSqlError(text);
+            const fp = isErr ? detectDbFingerprint(text) : "unknown";
             details.push({
               point,
               payload: p,
@@ -139,7 +141,7 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
                 location: String(res.headers["location"] || ""),
               },
               evidence: isErr ? clip(text) : undefined,
-              confirmations: isErr ? ["error_signature"] : undefined,
+              confirmations: isErr ? ["error_signature", fp] : undefined,
             });
             processed++;
             const avg = (Date.now() - tStart) / Math.max(1, processed);
