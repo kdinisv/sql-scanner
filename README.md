@@ -4,7 +4,7 @@
 
 — Node.js >= 18.17
 — Типы: TypeScript
-— Опционально: Playwright для JS-страниц
+– Опционально: Playwright для JS-страниц (захват сетевых запросов SPA)
 
 ## Установка
 
@@ -167,23 +167,23 @@ await scanner.scan({
 });
 ```
 
-- Предварительная авторизация (форма/JSON)
+– Предварительная авторизация (форма/JSON)
 
 ```ts
 await scanner.scan({
-  target: "http://127.0.0.1:8080/vulnerabilities/sqli/?id=1&Submit=Submit",
+  target: "https://site.local/products?id=1",
   method: "GET",
   auth: {
-    url: "http://127.0.0.1:8080/login.php",
+    url: "https://site.local/api/login",
     method: "POST",
-    type: "form-urlencoded",
+    type: "form-urlencoded", // или "json"
     usernameField: "username",
     passwordField: "password",
     username: "admin",
-    password: "password",
-    additionalFields: { Login: "Login" },
-    verifyUrl: "http://127.0.0.1:8080/index.php",
-    success: { notContainsText: "Login" },
+    password: "secret",
+    additionalFields: { remember: "1" },
+    verifyUrl: "https://site.local/",
+    success: { notContainsText: "Sign in" },
   },
   enable: { query: true, error: true, boolean: true },
 });
@@ -193,18 +193,17 @@ await scanner.scan({
 
 ```ts
 await scanner.smartScan({
-  baseUrl: "http://127.0.0.1:8080",
+  baseUrl: "https://site.local",
   auth: {
-    url: "http://127.0.0.1:8080/login.php",
+    url: "https://site.local/api/login",
     method: "POST",
-    type: "form-urlencoded",
-    usernameField: "username",
+    type: "json",
+    usernameField: "email",
     passwordField: "password",
-    username: "admin",
-    password: "password",
-    additionalFields: { Login: "Login" },
-    verifyUrl: "http://127.0.0.1:8080/index.php",
-    success: { notContainsText: "Login" },
+    username: "admin@site.local",
+    password: "secret",
+    verifyUrl: "https://site.local/",
+    success: { notContainsText: "Sign in" },
   },
 });
 ```
@@ -270,6 +269,9 @@ npx --package @kdinisv/sql-scanner sql-scan https://example.com
 ```bash
 npm i -g @kdinisv/sql-scanner
 sql-scan https://example.com
+
+# отключить захват JS/SPA (без Playwright)
+sql-scan https://example.com --no-js
 ```
 
 CLI показывает индикатор прогресса и оценку ETA в процессе.
@@ -294,6 +296,88 @@ npm test -s
 ```
 
 Это позволяет стабильно проверять детекторы без развертывания DVWA/bWAPP/Juice Shop и т.п.
+
+## Дополнительные примеры
+
+### 1) Сканирование JSON API (POST)
+
+```ts
+const result = await scanner.scan({
+  target: "https://api.site.local/search",
+  method: "POST",
+  jsonBody: { q: "test", page: 1 },
+  enable: { json: true, error: true, boolean: true, time: false },
+});
+```
+
+### 2) Сканирование формы
+
+```ts
+// target указывает на страницу с формой; сканер сам получит HTML и извлечёт поля
+const res = await scanner.scan({
+  target: "https://site.local/login",
+  enable: { form: true, error: true, boolean: true, time: false, query: false },
+});
+```
+
+### 3) Заголовки и куки (и инъекции в них)
+
+```ts
+const res = await scanner.scan({
+  target: "https://site.local/profile?id=1",
+  headers: { "X-Trace": "abc" },
+  cookies: { session: "token" },
+  enable: { header: true, cookie: true, error: true, boolean: true },
+});
+```
+
+### 4) Time-based проверки
+
+```ts
+const res = await scanner.scan({
+  target: "https://site.local/search?q=1",
+  enable: { query: true, time: true },
+  // Поднимите порог, если бэкенд медленный
+  timeThresholdMs: 3000,
+});
+```
+
+### 5) smartScan с/без JS
+
+```ts
+// Без JS (быстрее, только HTML)
+await scanner.smartScan({
+  baseUrl: "https://site.local",
+  usePlaywright: false,
+});
+
+// С JS (если установлен Playwright): захватывает запросы SPA
+await scanner.smartScan({
+  baseUrl: "https://site.local",
+  usePlaywright: true,
+  playwrightMaxPages: 4,
+});
+```
+
+### 6) Постобработка результатов
+
+```ts
+const onlyVuln = result.details.filter((d) => d.vulnerable);
+const byTechnique = onlyVuln.reduce(
+  (acc, d) => {
+    acc[d.technique] = (acc[d.technique] || 0) + 1;
+    return acc;
+  },
+  /** @type {Record<string, number>} */ {}
+);
+```
+
+### 7) Управление нагрузкой
+
+```ts
+const scanner = new SqlScanner({ parallel: 4, maxRequests: 500 });
+const res = await scanner.scan({ target: "https://site.local/?q=1" });
+```
 
 ## Важно
 
