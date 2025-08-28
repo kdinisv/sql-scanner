@@ -49,6 +49,6 @@ describe("DB emulator SQLi detection", () => {
       );
 
       expect(hasErr || hasBool || hasTime).toBe(true);
-    }, 20000);
+    }, 35000);
   }
 });

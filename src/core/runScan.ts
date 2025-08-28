@@ -23,6 +23,8 @@ import {
   extractTitle,
   sendWithInjection,
   performAuth,
+  mean,
+  pairedZTestPValue,
 } from "../utils.js";
 
 export async function runScan(input: ScanInput): Promise<ResultShape> {
@@ -231,52 +233,95 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
           }
         }
 
-        // time
+        // time with basic statistical confirmation
         if (enable.time ?? true) {
           const times = input.payloads?.time ?? timePayloads;
           for (const t of times) {
-            const t0 = Date.now();
-            const res = await sendWithInjection(
-              client,
-              input,
-              point,
-              t.p,
-              forms
+            const attempts = 3; // keep test runtime reasonable
+            const baselineTimes: number[] = [];
+            const injectedTimes: number[] = [];
+            let nearBaseAll = true;
+
+            for (let i = 0; i < attempts; i++) {
+              // baseline
+              let t0 = Date.now();
+              const baseRes = await sendWithInjection(
+                client,
+                input,
+                point,
+                "",
+                forms
+              );
+              let elapsedBase = Date.now() - t0;
+              baselineTimes.push(elapsedBase);
+              const baseOk = baseRes.status < 500;
+
+              await sleep(10);
+
+              // injected
+              t0 = Date.now();
+              const injRes = await sendWithInjection(
+                client,
+                input,
+                point,
+                t.p,
+                forms
+              );
+              const elapsedInj = Date.now() - t0;
+              injectedTimes.push(elapsedInj);
+              const near = injRes.status < 500 && baseOk; // don't require body similarity (payload may be echoed)
+              if (!near) nearBaseAll = false;
+
+              processed++;
+              const avg = (Date.now() - tStart) / Math.max(1, processed);
+              const eta =
+                plannedChecks > 0
+                  ? Math.max(0, Math.round(avg * (plannedChecks - processed)))
+                  : undefined;
+              report?.({
+                kind: "scan",
+                phase: "scan",
+                plannedChecks,
+                processedChecks: processed,
+                etaMs: eta,
+              });
+              await sleep(jitter());
+            }
+
+            const diffs = injectedTimes.map(
+              (x, i) => x - (baselineTimes[i] || 0)
             );
-            const elapsed = Date.now() - t0;
-            const text = bodyToText(res);
-            const nearBase =
-              similaritySignal(baseText, text) > 0.7 && res.status < 500;
-            const vuln = elapsed > (input.timeThresholdMs ?? 2500) && nearBase;
+            const { p, z } = pairedZTestPValue(diffs);
+            const avgBase = mean(baselineTimes);
+            const avgInj = mean(injectedTimes);
+            const threshold = input.timeThresholdMs ?? 2500;
+            const strongDelay = avgInj - avgBase > threshold * 0.8; // allow some noise
+            const vuln = nearBaseAll && strongDelay && p <= 0.05;
+
             details.push({
               point,
               payload: t.p,
               technique: "time",
               vulnerable: vuln,
               responseMeta: {
-                status: res.status,
-                elapsedMs: elapsed,
-                len: text.length,
-                location: String(res.headers["location"] || ""),
+                status: 200,
+                elapsedMs: Math.round(avgInj),
+                len: baseText.length,
               },
-              evidence: `elapsed_ms=${elapsed}`,
-              confirmations: vuln && t.label ? [t.label] : undefined,
+              evidence: `p=${p.toFixed(4)}, z=${z.toFixed(
+                2
+              )}, avgBase=${Math.round(avgBase)}ms, avgInj=${Math.round(
+                avgInj
+              )}ms`,
+              confirmations:
+                vuln && t.label
+                  ? [t.label, "time_pvalue"]
+                  : vuln
+                  ? ["time_pvalue"]
+                  : undefined,
             });
-            processed++;
-            const avg = (Date.now() - tStart) / Math.max(1, processed);
-            const eta =
-              plannedChecks > 0
-                ? Math.max(0, Math.round(avg * (plannedChecks - processed)))
-                : undefined;
-            report?.({
-              kind: "scan",
-              phase: "scan",
-              plannedChecks,
-              processedChecks: processed,
-              etaMs: eta,
-            });
+
             if (vuln) break;
-            await sleep(jitter());
           }
         }
       })

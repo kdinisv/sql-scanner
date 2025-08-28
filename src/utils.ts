@@ -350,6 +350,51 @@ export function clip(text: string, maxLength = 200): string {
   return text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
 }
 
+// Simple stats helpers
+export function mean(values: number[]): number {
+  if (!values.length) return 0;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+export function stddev(values: number[]): number {
+  if (values.length <= 1) return 0;
+  const m = mean(values);
+  const v =
+    values.reduce((acc, x) => acc + (x - m) * (x - m), 0) / (values.length - 1);
+  return Math.sqrt(Math.max(0, v));
+}
+
+// Normal CDF via erf approximation (Abramowitz and Stegun 7.1.26)
+export function normCdf(x: number): number {
+  // constants
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const p = 0.3275911;
+  const sign = x < 0 ? -1 : 1;
+  const absx = Math.abs(x) / Math.SQRT2;
+  const t = 1 / (1 + p * absx);
+  const y =
+    1 -
+    ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-absx * absx);
+  const erf = sign * y;
+  return 0.5 * (1 + erf);
+}
+
+// Paired Z-test (approx) for differences array; returns z and one-sided p-value P(Z >= z)
+export function pairedZTestPValue(diffs: number[]): { z: number; p: number } {
+  const n = diffs.length;
+  if (n <= 1) return { z: 0, p: 1 };
+  const m = mean(diffs);
+  const sd = stddev(diffs);
+  const se = sd / Math.sqrt(n);
+  const z = se > 1e-9 ? m / se : m > 0 ? 1e9 : 0;
+  const p = 1 - normCdf(z); // one-sided (we expect positive slowdown)
+  return { z, p };
+}
+
 // SQL injection detection
 export function hasSqlError(text: string): boolean {
   const errorPatterns = [

@@ -17,6 +17,12 @@ function hasErrorPayload(s: string): boolean {
   return /['"\\)]/.test(s);
 }
 
+function hasTimePayload(s: string): boolean {
+  return /SLEEP\(3\)|pg_sleep\(3\)|WAITFOR\s+DELAY|DBMS_LOCK\.SLEEP\(3\)/i.test(
+    s
+  );
+}
+
 function isBooleanTrue(s: string): boolean {
   return /(1\s*AND\s*1=1)|('\s*OR\s*1=1(--|\s|$))/.test(s);
 }
@@ -25,7 +31,10 @@ function isBooleanFalse(s: string): boolean {
   return /(1\s*AND\s*1=2)|('\s*OR\s*1=2(--|\s|$))/.test(s);
 }
 
-function respondLogic(res: http.ServerResponse, input: string) {
+async function respondLogic(res: http.ServerResponse, input: string) {
+  if (hasTimePayload(input)) {
+    await sleep(3100);
+  }
   if (hasErrorPayload(input)) {
     res.writeHead(200, { "content-type": "text/html" });
     res.end(
@@ -56,6 +65,15 @@ export async function startTestSite(): Promise<{
 }> {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
+    // Parse cookies
+    const cookies: Record<string, string> = {};
+    const cookieHeader = String(req.headers["cookie"] || "");
+    if (cookieHeader) {
+      cookieHeader.split(";").forEach((p) => {
+        const [k, v] = p.split("=");
+        if (k && v !== undefined) cookies[k.trim()] = v.trim();
+      });
+    }
     if (url.pathname === "/") {
       // HTML с ссылкой, формой и JS, делающим fetch (GET и POST)
       const html = `<!doctype html>
@@ -84,9 +102,19 @@ export async function startTestSite(): Promise<{
       return;
     }
 
+    if (url.pathname === "/account") {
+      const loggedIn = cookies["auth"] === "1";
+      const body = loggedIn
+        ? "<!doctype html><html><body><h1>Account</h1></body></html>"
+        : "<!doctype html><html><body><h1>Sign in</h1></body></html>";
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(body);
+      return;
+    }
+
     if (url.pathname === "/search") {
       const q = url.searchParams.get("q") || "";
-      if (respondLogic(res, q)) return;
+      if (await respondLogic(res, q)) return;
       res.writeHead(200, { "content-type": "text/html" });
       res.end(`<!doctype html><html><body>query=${q}</body></html>`);
       return;
@@ -96,7 +124,7 @@ export async function startTestSite(): Promise<{
       const body = await parseBody(req);
       const params = new URLSearchParams(body);
       const q = params.get("q") || "";
-      if (respondLogic(res, q)) return;
+      if (await respondLogic(res, q)) return;
       res.writeHead(200, { "content-type": "text/html" });
       res.end(`<!doctype html><html><body>form=${q}</body></html>`);
       return;
@@ -104,7 +132,7 @@ export async function startTestSite(): Promise<{
 
     if (url.pathname === "/api/data") {
       const foo = url.searchParams.get("foo") || "";
-      if (respondLogic(res, foo)) return;
+      if (await respondLogic(res, foo)) return;
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: true, foo }));
       return;
@@ -116,7 +144,7 @@ export async function startTestSite(): Promise<{
       try {
         q = JSON.parse(raw)?.q || "";
       } catch {}
-      if (respondLogic(res, q)) return;
+      if (await respondLogic(res, q)) return;
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: true, q }));
       return;
@@ -126,6 +154,38 @@ export async function startTestSite(): Promise<{
       await sleep(3100);
       res.writeHead(200, { "content-type": "text/html" });
       res.end("<html><body>slow</body></html>");
+      return;
+    }
+
+    // Auth endpoints
+    if (url.pathname === "/auth/login-form" && req.method === "POST") {
+      const body = await parseBody(req);
+      const p = new URLSearchParams(body);
+      const u = p.get("username");
+      const pw = p.get("password");
+      const ok = u === "admin" && pw === "secret";
+      if (ok) {
+        res.setHeader("Set-Cookie", ["auth=1; Path=/"]);
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok }));
+      return;
+    }
+    if (url.pathname === "/auth/login-json" && req.method === "POST") {
+      const raw = await parseBody(req);
+      let u = "",
+        pw = "";
+      try {
+        const j = JSON.parse(raw || "{}");
+        u = j?.email || j?.username || "";
+        pw = j?.password || "";
+      } catch {}
+      const ok = (u === "admin@site.local" || u === "admin") && pw === "secret";
+      if (ok) {
+        res.setHeader("Set-Cookie", ["auth=1; Path=/"]);
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok }));
       return;
     }
 
