@@ -5,8 +5,9 @@
 - [x] Выбор стека (Node.js TS или Python).
 - [ ] CLI (scan, report, help), .env-конфиги.
   - [x] scan (умное сканирование в CLI, exit codes)
-  - [x] report (флаги --report md|json, --out)
-  - [ ] help/usage, .env-конфиг
+  - [x] report (флаги --report md|json|csv|junit, --out)
+  - [x] help/usage
+  - [ ] .env-конфиг
 - [x] HTTP-драйвер (timeout/retry/proxy, cookie/JWT). (timeouts, короткие ретраи с backoff для GET, поддержка HTTP(S)\_PROXY, cookies/JWT через заголовки)
 - [x] Базовый Boolean-based детектор.
 - [x] JSON + Markdown отчёт. (SDK-хелперы + CLI сохранение)
@@ -25,7 +26,7 @@
 - [x] HTML/JSON кроулер.
 - [ ] OpenAPI, GraphQL introspection, Postman/HAR.
 - [ ] Типизация параметров.
-- [ ] Контекстные payload.
+- [x] Контекстные payload. (приоритет DB-специфичных time-пейлоадов по отпечатку)
 
 ## Этап 4. Подтверждение и снижение FP (2–3 недели)
 
@@ -37,7 +38,7 @@
 ## Этап 5. Отчёты и CI/CD (3–4 недели)
 
 - [ ] SARIF, Markdown/PDF. (Markdown уже реализован, PDF в планах)
-- [ ] CSV, JUnit.
+- [x] CSV, JUnit.
 - [x] Exit codes (0/1/2).
 - [ ] Интеграции с Jira, GitHub, Slack/Telegram.
 - [ ] Baseline suppression.

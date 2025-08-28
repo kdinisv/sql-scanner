@@ -1,6 +1,6 @@
 # @kdinisv/sql-scanner
 
-Лёгкий SDK для поиска SQL-инъекций в Node.js. Умеет точечно сканировать URL и выполнять «умное» сканирование с краулингом. Работает в ESM и CommonJS, типы включены.
+Лёгкий SDK для поиска SQL-инъекций в Node.js. Умеет точечно сканировать URL и выполнять «умное» сканирование с краулингом. Работает в ESM и CommonJS, типы включены. Поддерживает отчёты JSON/Markdown/CSV/JUnit и приоритизирует time-based payload’ы по отпечатку СУБД.
 
 — Node.js >= 18.17
 — Типы: TypeScript
@@ -273,9 +273,11 @@ sql-scan https://example.com
 # отключить захват JS/SPA (без Playwright)
 sql-scan https://example.com --no-js
 
-# сохранить отчёт (Markdown или JSON)
+# сохранить отчёт (Markdown/JSON/CSV/JUnit)
 sql-scan https://example.com --report md --out report.md
 sql-scan https://example.com --report json --out report.json
+sql-scan https://example.com --report csv --out report.csv
+sql-scan https://example.com --report junit --out report.xml
 ```
 
 CLI показывает индикатор прогресса и оценку ETA в процессе.
@@ -305,6 +307,8 @@ npm test -s
   - HTTP_PROXY / HTTPS_PROXY — адрес прокси, например: `http://127.0.0.1:3128` или с авторизацией `http://user:pass@proxy.local:8080`.
   - NO_PROXY — список исключений через запятую (если задан системно, будет учтён на стороне среды).
 - Для транзиентных ошибок на GET (502/503/504, сетевые таймауты) вшиты короткие ретраи с экспоненциальным backoff.
+
+— Приоритет пейлоадов: если error-based детект дал отпечаток СУБД (MySQL/Postgres/MSSQL/Oracle/SQLite), time-based подбор сначала пробует соответствующие пейлоады (например, pg_sleep/WAITFOR/DBMS_LOCK.SLEEP), что ускоряет и повышает точность.
 
 ## Дополнительные примеры
 
@@ -383,13 +387,20 @@ const byTechnique = onlyVuln.reduce(
 );
 ```
 
-— Готовые репорты: JSON/Markdown
+— Готовые репорты: JSON/Markdown/CSV/JUnit
 
 ```ts
-import { toJsonReport, toMarkdownReport } from "@kdinisv/sql-scanner";
+import {
+  toJsonReport,
+  toMarkdownReport,
+  toCsvReport,
+  toJUnitReport,
+} from "@kdinisv/sql-scanner";
 
 const json = toJsonReport(result);
 const md = toMarkdownReport(result);
+const csv = toCsvReport(result);
+const junitXml = toJUnitReport(result);
 // Сохраните в файл или отправьте в CI-артефакты
 ```
 

