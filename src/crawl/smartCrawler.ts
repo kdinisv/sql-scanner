@@ -99,7 +99,7 @@ export async function smartScan(
     cookies,
     techniques,
   } = opts;
-  console.warn("[!] Use only with permission.");
+  // console.warn("[!] Use only with permission.");
   const onP = opts.onProgress;
   // Perform optional auth first and use resulting headers/cookies for crawling
   const authClient = buildClient(requestTimeoutMs, headers, cookies);

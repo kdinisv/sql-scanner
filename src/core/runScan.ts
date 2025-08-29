@@ -43,7 +43,7 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
     maxRequests = 500,
     enable = {},
   } = input;
-  console.warn("[!] Use only with permission.");
+  // console.warn("[!] Use only with permission.");
   // If auth is provided, run it and merge cookies/headers
   const authClient = buildClient(requestTimeoutMs, headers, cookies);
   const authResult = await performAuth(authClient, auth);
