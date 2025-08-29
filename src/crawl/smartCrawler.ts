@@ -25,7 +25,9 @@ async function discoverWithPlaywright(
   } catch {
     return out;
   }
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: opts.playwrightHeadless ?? true,
+  });
   try {
     const context = await browser.newContext();
     const maxPages = opts.playwrightMaxPages ?? Math.min(10, startUrls.length);
@@ -95,6 +97,7 @@ export async function smartScan(
     sameOriginOnly = true,
     requestTimeoutMs = 10000,
     usePlaywright = true,
+    playwrightHeadless = true,
     headers,
     cookies,
     techniques,
@@ -139,7 +142,10 @@ export async function smartScan(
 
   if (usePlaywright) {
     const startPages = Array.from(visited).slice(0, Math.min(20, visited.size));
-    const jsonTargets = await discoverWithPlaywright(startPages, opts);
+    const jsonTargets = await discoverWithPlaywright(startPages, {
+      ...opts,
+      playwrightHeadless,
+    });
     for (const jt of jsonTargets) candidates.push(jt);
   }
 

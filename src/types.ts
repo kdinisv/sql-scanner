@@ -94,6 +94,8 @@ export type SmartScanOptions = {
   requestTimeoutMs?: number;
   usePlaywright?: boolean;
   playwrightMaxPages?: number;
+  /** Если true — без UI (по умолчанию true). Установите false, чтобы видеть окно браузера. */
+  playwrightHeadless?: boolean;
   headers?: Record<string, string>;
   cookies?: Record<string, string>;
   auth?: AuthOptions; // optional pre-scan authentication before crawling

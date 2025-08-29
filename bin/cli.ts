@@ -25,6 +25,7 @@ async function main() {
       `Usage: sql-scan <url> [--no-js] [--report json|md|csv|junit] [--out path]\n\n` +
         `Options:\n` +
         `  --no-js                Disable JS/SPA capture (faster)\n` +
+        `  --headed               Run Playwright with visible browser window (headless=false)\n` +
         `  --report <fmt>         Save report in format: json|md|csv|junit\n` +
         `  --out <path>           Output file path for the report\n` +
         `  -h, --help             Show this help\n`
@@ -72,6 +73,13 @@ async function main() {
   // env defaults (overridable by flags)
   const envUseJs = parseBool(process.env.SQL_SCANNER_USE_JS, true);
   const useJs = process.argv.includes("--no-js") ? false : envUseJs;
+  const envHeadless = parseBool(
+    process.env.SQL_SCANNER_PLAYWRIGHT_HEADLESS,
+    true
+  );
+  const playwrightHeadless = process.argv.includes("--headed")
+    ? false
+    : envHeadless;
   const reportFmt = (() => {
     const i = process.argv.indexOf("--report");
     if (i >= 0 && process.argv[i + 1]) return process.argv[i + 1];
@@ -124,6 +132,7 @@ async function main() {
   const res = await scanner.smartScan({
     baseUrl: url,
     usePlaywright: useJs,
+    playwrightHeadless,
     maxDepth: parseNum(process.env.SQL_SCANNER_MAX_DEPTH, 2),
     maxPages: parseNum(process.env.SQL_SCANNER_MAX_PAGES, 50),
     sameOriginOnly: parseBool(process.env.SQL_SCANNER_SAME_ORIGIN_ONLY, true),
