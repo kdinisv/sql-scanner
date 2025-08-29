@@ -30,7 +30,12 @@ async function discoverWithPlaywright(
   });
   try {
     const context = await browser.newContext();
-    const maxPages = opts.playwrightMaxPages ?? Math.min(10, startUrls.length);
+    const maxPages =
+      opts.playwrightMaxPages === undefined
+        ? Math.min(10, startUrls.length)
+        : opts.playwrightMaxPages <= 0
+        ? startUrls.length
+        : opts.playwrightMaxPages;
     // фильтруем только http/https
     const httpOnly = startUrls.filter((u) => /^https?:/i.test(u));
     const pagesToVisit = httpOnly.slice(0, maxPages);

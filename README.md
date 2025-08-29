@@ -402,7 +402,7 @@ await scanner.smartScan({
 await scanner.smartScan({
   baseUrl: "https://site.local",
   usePlaywright: true,
-  playwrightMaxPages: 4,
+  playwrightMaxPages: 4, // 0 или отрицательное — без ограничения
   playwrightConcurrency: 3, // несколько страниц параллельно
   playwrightWaitMs: 1200, // чуть дольше ждём XHR
   scanParallel: 3, // параллельно сканируем кандидатов
