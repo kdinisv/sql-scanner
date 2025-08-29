@@ -74,6 +74,10 @@ console.log(smart.crawledPages, smart.candidates.length, smart.sqli.length);
 - smartScan(options)
   - baseUrl: string, maxDepth?: number, maxPages?: number
   - sameOriginOnly?: boolean, usePlaywright?: boolean
+  - crawlConcurrency?: number — параллельность HTML-краулинга (по умолчанию 4)
+  - playwrightConcurrency?: number — число одновременных страниц Playwright (по умолчанию 2)
+  - playwrightWaitMs?: number — ожидание XHR/fetch после загрузки, мс (по умолчанию 1000)
+  - scanParallel?: number — параллельное сканирование кандидатов (по умолчанию 2)
   - techniques?: { error?: boolean; boolean?: boolean; time?: boolean }
   - onProgress?: (p: SmartScanProgress) => void
   - Возвращает: { crawledPages: number; candidates: DiscoveredTarget[]; sqli: ResultShape[] }
@@ -391,6 +395,7 @@ const res = await scanner.scan({
 await scanner.smartScan({
   baseUrl: "https://site.local",
   usePlaywright: false,
+  crawlConcurrency: 6, // быстрее HTML-краулинг
 });
 
 // С JS (если установлен Playwright): захватывает запросы SPA
@@ -398,6 +403,9 @@ await scanner.smartScan({
   baseUrl: "https://site.local",
   usePlaywright: true,
   playwrightMaxPages: 4,
+  playwrightConcurrency: 3, // несколько страниц параллельно
+  playwrightWaitMs: 1200, // чуть дольше ждём XHR
+  scanParallel: 3, // параллельно сканируем кандидатов
 });
 ```
 
@@ -442,6 +450,14 @@ const junitXml = toJUnitReport(result);
 ```ts
 const scanner = new SqlScanner({ parallel: 4, maxRequests: 500 });
 const res = await scanner.scan({ target: "https://site.local/?q=1" });
+
+// Для smartScan скорость можно настраивать:
+await scanner.smartScan({
+  baseUrl: "https://site.local",
+  crawlConcurrency: 4,
+  playwrightConcurrency: 2,
+  scanParallel: 2,
+});
 ```
 
 ### 8) UNION/ORDER BY (PoC)

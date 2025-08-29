@@ -34,52 +34,63 @@ async function discoverWithPlaywright(
     // фильтруем только http/https
     const httpOnly = startUrls.filter((u) => /^https?:/i.test(u));
     const pagesToVisit = httpOnly.slice(0, maxPages);
-    for (const url of pagesToVisit) {
-      const page = await context.newPage();
-      page.on("request", (req: any) => {
-        try {
-          const url = req.url();
-          const method = req.method().toUpperCase();
-          if (!/^https?:/i.test(url)) return;
-          if (opts.sameOriginOnly && !isSameOrigin(opts.baseUrl, url)) return;
-          const key = `${method} ${url}`;
-          if (seenReq.has(key)) return;
-          seenReq.add(key);
-          let body: any = undefined;
-          const postData = req.postData();
-          if (postData) {
-            try {
-              if (
-                /application\/json/i.test(req.headers()["content-type"] || "")
-              )
-                body = JSON.parse(postData);
-              else body = postData;
-            } catch {
-              body = postData;
-            }
+    const onRequest = (req: any) => {
+      try {
+        const reqUrl = req.url();
+        const method = req.method().toUpperCase();
+        if (!/^https?:/i.test(reqUrl)) return;
+        if (opts.sameOriginOnly && !isSameOrigin(opts.baseUrl, reqUrl)) return;
+        const key = `${method} ${reqUrl}`;
+        if (seenReq.has(key)) return;
+        seenReq.add(key);
+        let body: any = undefined;
+        const postData = req.postData();
+        if (postData) {
+          try {
+            if (/application\/json/i.test(req.headers()["content-type"] || ""))
+              body = JSON.parse(postData);
+            else body = postData;
+          } catch {
+            body = postData;
           }
-          out.push({
-            kind: "json-endpoint",
-            url,
-            method: method as any,
-            body,
-            headers: req.headers(),
-          });
-        } catch {}
-      });
-      // пропускаем не-HTTP(S) даже если каким-то образом просочились
-      if (!/^https?:/i.test(url)) {
-        await page.close();
-        continue;
-      }
+        }
+        out.push({
+          kind: "json-endpoint",
+          url: reqUrl,
+          method: method as any,
+          body,
+          headers: req.headers(),
+        });
+      } catch {}
+    };
+    const concurrency = Math.max(
+      1,
+      Math.min(8, opts.playwrightConcurrency ?? 2)
+    );
+    const waitMs = Math.max(0, opts.playwrightWaitMs ?? 1000);
+    const pool = await Promise.all(
+      Array.from({ length: concurrency }, async () => {
+        const page = await context.newPage();
+        page.on("request", onRequest);
+        return page;
+      })
+    );
+    let idx = 0;
+    const tasks = pagesToVisit.map((url) => async () => {
+      const page = pool[idx++ % pool.length];
+      if (!/^https?:/i.test(url)) return;
       try {
         await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
-        await page.waitForTimeout(1500);
-      } catch {
-        // игнорируем ошибки навигации (например, abort на mailto:)
-      } finally {
-        await page.close();
-      }
+        await page.waitForTimeout(waitMs);
+      } catch {}
+    });
+    // простая реализация пула: запускаем пачками по concurrency
+    for (let i = 0; i < tasks.length; i += concurrency) {
+      await Promise.all(tasks.slice(i, i + concurrency).map((t) => t()));
+    }
+    for (const page of pool) {
+      page.off("request", onRequest);
+      await page.close();
     }
   } finally {
     await browser.close();
@@ -117,27 +128,39 @@ export async function smartScan(
   const visited = new Set<string>();
   const candidates: DiscoveredTarget[] = [];
   let crawled = 0;
+  const crawlConc = Math.max(1, Math.min(16, opts.crawlConcurrency ?? 4));
 
-  while (q.length && crawled < maxPages) {
-    const { url, depth } = q.shift()!;
-    if (visited.has(url)) continue;
+  async function crawlOne(item: { url: string; depth: number }) {
+    const { url, depth } = item;
+    if (visited.has(url)) return;
     visited.add(url);
+    if (crawled >= maxPages) return;
     crawled++;
     const html = await fetchHtml(client, url);
-    if (!html) continue;
+    if (!html) return;
     const { links, forms } = extractLinksAndForms(url, html);
     forms.forEach((f) => candidates.push(f));
     for (const link of links) {
       if (sameOriginOnly && !isSameOrigin(origin, link)) continue;
-      if (/\.(png|jpe?g|gif|svg|webp|ico|pdf|zip|rar|7z|mp4|mp3)$/i.test(link))
+      if (
+        /(\.(png|jpe?g|gif|svg|webp|ico|pdf|zip|rar|7z|mp4|mp3))$/i.test(link)
+      )
         continue;
-      const u = new NodeURL(link);
-      if ([...u.searchParams.keys()].length > 0)
-        candidates.push({ kind: "url-with-query", url: u.toString() });
-      if (depth + 1 <= maxDepth)
-        q.push({ url: u.toString(), depth: depth + 1 });
+      try {
+        const u = new NodeURL(link);
+        const href = u.toString();
+        if ([...u.searchParams.keys()].length > 0)
+          candidates.push({ kind: "url-with-query", url: href });
+        if (depth + 1 <= maxDepth && !visited.has(href))
+          q.push({ url: href, depth: depth + 1 });
+      } catch {}
     }
     onP?.({ kind: "smart", phase: "crawl", crawledPages: crawled, maxPages });
+  }
+
+  while (q.length && crawled < maxPages) {
+    const batch = q.splice(0, crawlConc);
+    await Promise.all(batch.map(crawlOne));
   }
 
   if (usePlaywright) {
@@ -173,126 +196,132 @@ export async function smartScan(
     scanProcessed: 0,
     scanTotal: uniqueCandidates.length,
   });
-  for (const c of uniqueCandidates) {
+  // Параллельное сканирование кандидатов
+  const scanParallel = Math.max(1, Math.min(8, opts.scanParallel ?? 2));
+  let processed = 0;
+  async function scanOne(c: DiscoveredTarget) {
     if (c.kind === "url-with-query") {
-      sqliResults.push(
-        await runScan({
-          target: c.url,
-          method: "GET",
-          headers: mergedHeaders,
-          cookies: mergedCookies,
-          requestTimeoutMs,
-          enable: {
-            query: true,
-            path: true,
-            form: false,
-            json: false,
-            header: false,
-            cookie: false,
-            error: techniques?.error ?? true,
-            boolean: techniques?.boolean ?? true,
-            time: techniques?.time ?? true,
-          },
-          onProgress: (p) => {
-            if (p.phase === "done") {
-              const done =
-                sqliResults.length + 1 > uniqueCandidates.length
-                  ? uniqueCandidates.length
-                  : sqliResults.length + 1;
-              const remaining = Math.max(0, uniqueCandidates.length - done);
-              onP?.({
-                kind: "smart",
-                phase: "scan",
-                candidatesFound: uniqueCandidates.length,
-                scanProcessed: done,
-                scanTotal: uniqueCandidates.length,
-                etaMs: remaining * (p.etaMs ?? 0),
-              });
-            }
-          },
-        })
-      );
+      const res = await runScan({
+        target: c.url,
+        method: "GET",
+        headers: mergedHeaders,
+        cookies: mergedCookies,
+        requestTimeoutMs,
+        enable: {
+          query: true,
+          path: true,
+          form: false,
+          json: false,
+          header: false,
+          cookie: false,
+          error: techniques?.error ?? true,
+          boolean: techniques?.boolean ?? true,
+          time: techniques?.time ?? true,
+        },
+        onProgress: (p) => {
+          if (p.phase === "done") {
+            const done = Math.min(uniqueCandidates.length, processed + 1);
+            const remaining = Math.max(0, uniqueCandidates.length - done);
+            onP?.({
+              kind: "smart",
+              phase: "scan",
+              candidatesFound: uniqueCandidates.length,
+              scanProcessed: done,
+              scanTotal: uniqueCandidates.length,
+              etaMs: remaining * (p.etaMs ?? 0),
+            });
+          }
+        },
+      });
+      sqliResults.push(res);
+      processed++;
     } else if (c.kind === "form") {
-      sqliResults.push(
-        await runScan({
-          target: c.action,
-          method: c.method,
-          headers: mergedHeaders,
-          cookies: mergedCookies,
-          requestTimeoutMs,
-          enable: {
-            query: false,
-            path: false,
-            form: true,
-            json: false,
-            header: false,
-            cookie: false,
-            error: techniques?.error ?? true,
-            boolean: techniques?.boolean ?? true,
-            time: techniques?.time ?? true,
-          },
-          onProgress: (p) => {
-            if (p.phase === "done") {
-              const done =
-                sqliResults.length + 1 > uniqueCandidates.length
-                  ? uniqueCandidates.length
-                  : sqliResults.length + 1;
-              const remaining = Math.max(0, uniqueCandidates.length - done);
-              onP?.({
-                kind: "smart",
-                phase: "scan",
-                candidatesFound: uniqueCandidates.length,
-                scanProcessed: done,
-                scanTotal: uniqueCandidates.length,
-                etaMs: remaining * (p.etaMs ?? 0),
-              });
-            }
-          },
-        })
-      );
+      const res = await runScan({
+        target: c.action,
+        method: c.method,
+        headers: mergedHeaders,
+        cookies: mergedCookies,
+        requestTimeoutMs,
+        enable: {
+          query: false,
+          path: false,
+          form: true,
+          json: false,
+          header: false,
+          cookie: false,
+          error: techniques?.error ?? true,
+          boolean: techniques?.boolean ?? true,
+          time: techniques?.time ?? true,
+        },
+        onProgress: (p) => {
+          if (p.phase === "done") {
+            const done = Math.min(uniqueCandidates.length, processed + 1);
+            const remaining = Math.max(0, uniqueCandidates.length - done);
+            onP?.({
+              kind: "smart",
+              phase: "scan",
+              candidatesFound: uniqueCandidates.length,
+              scanProcessed: done,
+              scanTotal: uniqueCandidates.length,
+              etaMs: remaining * (p.etaMs ?? 0),
+            });
+          }
+        },
+      });
+      sqliResults.push(res);
+      processed++;
     } else if (c.kind === "json-endpoint") {
       const enableJson = ["POST", "PUT", "PATCH"].includes(c.method);
-      sqliResults.push(
-        await runScan({
-          target: c.url,
-          method: c.method === "GET" || c.method === "POST" ? c.method : "POST",
-          headers: { ...mergedHeaders, ...(c.headers || {}) },
-          cookies: mergedCookies,
-          jsonBody:
-            enableJson && typeof c.body === "object" ? c.body : undefined,
-          requestTimeoutMs,
-          enable: {
-            query: true,
-            path: true,
-            form: false,
-            json: enableJson,
-            header: false,
-            cookie: false,
-            error: techniques?.error ?? true,
-            boolean: techniques?.boolean ?? true,
-            time: techniques?.time ?? true,
-          },
-          onProgress: (p) => {
-            if (p.phase === "done") {
-              const done =
-                sqliResults.length + 1 > uniqueCandidates.length
-                  ? uniqueCandidates.length
-                  : sqliResults.length + 1;
-              const remaining = Math.max(0, uniqueCandidates.length - done);
-              onP?.({
-                kind: "smart",
-                phase: "scan",
-                candidatesFound: uniqueCandidates.length,
-                scanProcessed: done,
-                scanTotal: uniqueCandidates.length,
-                etaMs: remaining * (p.etaMs ?? 0),
-              });
-            }
-          },
-        })
-      );
+      const res = await runScan({
+        target: c.url,
+        method: c.method === "GET" || c.method === "POST" ? c.method : "POST",
+        headers: { ...mergedHeaders, ...(c.headers || {}) },
+        cookies: mergedCookies,
+        jsonBody: enableJson && typeof c.body === "object" ? c.body : undefined,
+        requestTimeoutMs,
+        enable: {
+          query: true,
+          path: true,
+          form: false,
+          json: enableJson,
+          header: false,
+          cookie: false,
+          error: techniques?.error ?? true,
+          boolean: techniques?.boolean ?? true,
+          time: techniques?.time ?? true,
+        },
+        onProgress: (p) => {
+          if (p.phase === "done") {
+            const done = Math.min(uniqueCandidates.length, processed + 1);
+            const remaining = Math.max(0, uniqueCandidates.length - done);
+            onP?.({
+              kind: "smart",
+              phase: "scan",
+              candidatesFound: uniqueCandidates.length,
+              scanProcessed: done,
+              scanTotal: uniqueCandidates.length,
+              etaMs: remaining * (p.etaMs ?? 0),
+            });
+          }
+        },
+      });
+      sqliResults.push(res);
+      processed++;
     }
   }
+
+  // простой пул: запускаем до scanParallel задач одновременно
+  let cursor = 0;
+  const running: Promise<void>[] = [];
+  async function runNext(): Promise<void> {
+    if (cursor >= uniqueCandidates.length) return;
+    const c = uniqueCandidates[cursor++];
+    await scanOne(c);
+    return runNext();
+  }
+  for (let i = 0; i < Math.min(scanParallel, uniqueCandidates.length); i++)
+    running.push(runNext());
+  await Promise.all(running);
 
   onP?.({
     kind: "smart",

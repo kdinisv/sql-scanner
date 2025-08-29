@@ -105,6 +105,12 @@ export type SmartScanOptions = {
   playwrightMaxPages?: number;
   /** Если true — без UI (по умолчанию true). Установите false, чтобы видеть окно браузера. */
   playwrightHeadless?: boolean;
+  /** Количество параллельных Playwright-страниц для сбора JS-сетевых запросов (по умолчанию 1-2) */
+  playwrightConcurrency?: number;
+  /** Пауза ожидания XHR/fetch после загрузки страницы, мс (по умолчанию ~1000) */
+  playwrightWaitMs?: number;
+  /** Параллельность HTML-краулинга без JS (количество одновременных запросов страниц). По умолчанию 4. */
+  crawlConcurrency?: number;
   headers?: Record<string, string>;
   cookies?: Record<string, string>;
   auth?: AuthOptions; // optional pre-scan authentication before crawling
@@ -113,6 +119,8 @@ export type SmartScanOptions = {
     boolean?: boolean;
     time?: boolean;
   };
+  /** Параллельность сканирования кандидатов (сколько целей сканировать одновременно). По умолчанию 2. */
+  scanParallel?: number;
   onProgress?: (p: SmartScanProgress) => void;
 };
 
