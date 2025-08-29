@@ -282,6 +282,20 @@ sql-scan https://example.com --report junit --out report.xml
 
 CLI показывает индикатор прогресса и оценку ETA в процессе.
 
+### .env-конфиг
+
+CLI поддерживает конфигурацию через .env-файл (dotenv). Создайте `.env` в корне проекта (см. `.env.example`). Основные переменные:
+
+- SQL_SCANNER_REQUEST_TIMEOUT_MS, SQL_SCANNER_TIME_THRESHOLD_MS
+- SQL_SCANNER_PARALLEL, SQL_SCANNER_MAX_REQUESTS
+- SQL_SCANNER_USE_JS, SQL_SCANNER_MAX_DEPTH, SQL_SCANNER_MAX_PAGES, SQL_SCANNER_SAME_ORIGIN_ONLY
+- SQL_SCANNER_TECHNIQUES=error,boolean,time
+- SQL_SCANNER_HEADERS / SQL_SCANNER_HEADERS_JSON (JSON строка)
+- SQL_SCANNER_COOKIES / SQL_SCANNER_COOKIES_JSON (JSON строка)
+- SQL_SCANNER_AUTH_JSON (JSON строка с параметрами авторизации)
+
+Переменные окружения прокси HTTP_PROXY/HTTPS_PROXY/NO_PROXY также учитываются.
+
 ## Тестовые эмуляторы СУБД (для разработки)
 
 В репозитории есть лёгкие локальные HTTP-эмуляторы баз данных, которые имитируют поведение MySQL/PostgreSQL/MSSQL/Oracle/SQLite для техник:

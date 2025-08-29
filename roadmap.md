@@ -7,7 +7,7 @@
   - [x] scan (умное сканирование в CLI, exit codes)
   - [x] report (флаги --report md|json|csv|junit, --out)
   - [x] help/usage
-  - [ ] .env-конфиг
+  - [x] .env-конфиг
 - [x] HTTP-драйвер (timeout/retry/proxy, cookie/JWT). (timeouts, короткие ретраи с backoff для GET, поддержка HTTP(S)\_PROXY, cookies/JWT через заголовки)
 - [x] Базовый Boolean-based детектор.
 - [x] JSON + Markdown отчёт. (SDK-хелперы + CLI сохранение)

@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// Загружаем .env (если есть)
+import "dotenv/config";
+
 // Динамический импорт собранного ESM-бандла, чтобы не тянуть src при сборке CLI
 async function getScanner() {
   const mod = await import(new URL("./esm/index.js", import.meta.url).href);
@@ -37,7 +40,38 @@ async function main() {
     process.exit(2);
   }
 
-  const useJs = !process.argv.includes("--no-js");
+  // helpers for env parsing
+  const parseBool = (v: string | undefined, def: boolean): boolean => {
+    if (v == null || v === "") return def;
+    const s = String(v).trim().toLowerCase();
+    return ["1", "true", "yes", "y", "on"].includes(s)
+      ? true
+      : ["0", "false", "no", "n", "off"].includes(s)
+      ? false
+      : def;
+  };
+  const parseNum = (v: string | undefined, def: number): number => {
+    if (v == null || v === "") return def;
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : def;
+  };
+  const parsePairs = (
+    v: string | undefined
+  ): Record<string, string> | undefined => {
+    if (!v) return undefined;
+    const out: Record<string, string> = {};
+    for (const chunk of v.split(/[,;\n]+/)) {
+      const [k, ...rest] = chunk.split("=");
+      const key = k?.trim();
+      if (!key) continue;
+      out[key] = rest.join("=").trim();
+    }
+    return Object.keys(out).length ? out : undefined;
+  };
+
+  // env defaults (overridable by flags)
+  const envUseJs = parseBool(process.env.SQL_SCANNER_USE_JS, true);
+  const useJs = process.argv.includes("--no-js") ? false : envUseJs;
   const reportFmt = (() => {
     const i = process.argv.indexOf("--report");
     if (i >= 0 && process.argv[i + 1]) return process.argv[i + 1];
@@ -56,19 +90,71 @@ async function main() {
     toCsvReport,
     toJUnitReport,
   } = await getScanner();
+  // Build scanner options from env (with sane defaults)
   const scanner = new SqlScanner({
-    requestTimeoutMs: 10000,
-    timeThresholdMs: 3000,
-    parallel: 4,
-    maxRequests: 500,
+    requestTimeoutMs: parseNum(
+      process.env.SQL_SCANNER_REQUEST_TIMEOUT_MS,
+      10000
+    ),
+    timeThresholdMs: parseNum(process.env.SQL_SCANNER_TIME_THRESHOLD_MS, 3000),
+    parallel: parseNum(process.env.SQL_SCANNER_PARALLEL, 4),
+    maxRequests: parseNum(process.env.SQL_SCANNER_MAX_REQUESTS, 500),
+    headers:
+      (process.env.SQL_SCANNER_HEADERS_JSON &&
+        (() => {
+          try {
+            return JSON.parse(process.env.SQL_SCANNER_HEADERS_JSON!);
+          } catch {
+            return undefined;
+          }
+        })()) ||
+      parsePairs(process.env.SQL_SCANNER_HEADERS),
+    cookies:
+      (process.env.SQL_SCANNER_COOKIES_JSON &&
+        (() => {
+          try {
+            return JSON.parse(process.env.SQL_SCANNER_COOKIES_JSON!);
+          } catch {
+            return undefined;
+          }
+        })()) ||
+      parsePairs(process.env.SQL_SCANNER_COOKIES),
   });
 
   const res = await scanner.smartScan({
     baseUrl: url,
     usePlaywright: useJs,
-    maxDepth: 2,
-    maxPages: 50,
-    sameOriginOnly: true,
+    maxDepth: parseNum(process.env.SQL_SCANNER_MAX_DEPTH, 2),
+    maxPages: parseNum(process.env.SQL_SCANNER_MAX_PAGES, 50),
+    sameOriginOnly: parseBool(process.env.SQL_SCANNER_SAME_ORIGIN_ONLY, true),
+    // techniques toggles (error/boolean/time) via CSV: e.g., "error,boolean"
+    ...(process.env.SQL_SCANNER_TECHNIQUES
+      ? {
+          techniques: (() => {
+            const set = new Set(
+              process.env
+                .SQL_SCANNER_TECHNIQUES!.split(/[ ,;]+/)
+                .map((s) => s.trim().toLowerCase())
+                .filter(Boolean)
+            );
+            return {
+              error: set.has("error"),
+              boolean: set.has("boolean"),
+              time: set.has("time"),
+            };
+          })(),
+        }
+      : {}),
+    // auth via JSON (опционально)
+    ...(process.env.SQL_SCANNER_AUTH_JSON
+      ? (() => {
+          try {
+            return { auth: JSON.parse(process.env.SQL_SCANNER_AUTH_JSON!) };
+          } catch {
+            return {} as any;
+          }
+        })()
+      : {}),
     onProgress: (p: any) => {
       const fmt = (ms?: number) =>
         ms === undefined ? "?" : `${Math.ceil(ms / 1000)}s`;
