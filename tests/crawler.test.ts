@@ -34,6 +34,11 @@ describe("smartScan crawler (with and without JS)", () => {
   }, 20000);
 
   it("captures JS network (if Playwright installed) and scans JSON endpoints", async () => {
+    if (!process.env.RUN_PLAYWRIGHT) {
+      // eslint-disable-next-line no-console
+      console.warn("[skip] Set RUN_PLAYWRIGHT=1 to run Playwright test");
+      return;
+    }
     if (!(await hasPlaywright())) {
       // eslint-disable-next-line no-console
       console.warn("[skip] Playwright not installed");

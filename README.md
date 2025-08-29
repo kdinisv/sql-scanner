@@ -1,6 +1,6 @@
 # @kdinisv/sql-scanner
 
-Лёгкий SDK для поиска SQL-инъекций в Node.js. Умеет точечно сканировать URL и выполнять «умное» сканирование с краулингом. Работает в ESM и CommonJS, типы включены. Поддерживает отчёты JSON/Markdown/CSV/JUnit и приоритизирует time-based payload’ы по отпечатку СУБД.
+Лёгкий SDK для поиска SQL-инъекций в Node.js. Умеет точечно сканировать URL и выполнять «умное» сканирование с краулингом. Работает в ESM и CommonJS, типы включены. Поддерживает отчёты JSON/Markdown/CSV/JUnit и приоритизирует payload’ы (в т.ч. time/union PoC) по отпечатку СУБД.
 
 — Node.js >= 18.17
 — Типы: TypeScript
@@ -66,7 +66,7 @@ console.log(smart.crawledPages, smart.candidates.length, smart.sqli.length);
 
   - target: string, method?: "GET"|"POST"
   - jsonBody?: Record<string,unknown>
-  - enable?: { query|path|form|json|header|cookie|error|boolean|time?: boolean }
+  - enable?: { query|path|form|json|header|cookie|error|boolean|time|union?: boolean }
   - payloads?: { error?: string[]; boolean?: { true:string; false:string; label?:string }[]; time?: { p:string; label?:string }[] }
   - onProgress?: (p: ScanProgress) => void
   - Возвращает: { vulnerable: boolean; details: Detail[] }
@@ -284,11 +284,12 @@ CLI показывает индикатор прогресса и оценку E
 
 ## Тестовые эмуляторы СУБД (для разработки)
 
-В репозитории есть лёгкие локальные HTTP-эмуляторы баз данных, которые имитируют поведение MySQL/PostgreSQL/MSSQL/Oracle/SQLite для трёх техник:
+В репозитории есть лёгкие локальные HTTP-эмуляторы баз данных, которые имитируют поведение MySQL/PostgreSQL/MSSQL/Oracle/SQLite для техник:
 
 - error-based — возвращают характерные сигнатуры ошибок СУБД;
 - boolean-based — различающиеся ответы для «true/false» инъекций;
-- time-based — искусственная задержка при SLEEP/pg_sleep/WAITFOR/DBMS_LOCK.SLEEP.
+- time-based — искусственная задержка при SLEEP/pg_sleep/WAITFOR/DBMS_LOCK.SLEEP;
+- union-based PoC — различия в ответах для ORDER BY ok/bad и UNION SELECT.
 
 Они используются в автотестах и не требуют внешних контейнеров/стендов:
 
@@ -309,6 +310,8 @@ npm test -s
 - Для транзиентных ошибок на GET (502/503/504, сетевые таймауты) вшиты короткие ретраи с экспоненциальным backoff.
 
 — Приоритет пейлоадов: если error-based детект дал отпечаток СУБД (MySQL/Postgres/MSSQL/Oracle/SQLite), time-based подбор сначала пробует соответствующие пейлоады (например, pg_sleep/WAITFOR/DBMS_LOCK.SLEEP), что ускоряет и повышает точность.
+
+— Union-based PoC: реализованы безопасные пробы ORDER BY (сравнение ответов на валидный/заведомо «лишний» индекс) и базовые UNION SELECT пейлоады. При наличии отпечатка СУБД выбираются наиболее подходящие варианты.
 
 ## Дополнительные примеры
 
@@ -410,6 +413,27 @@ const junitXml = toJUnitReport(result);
 const scanner = new SqlScanner({ parallel: 4, maxRequests: 500 });
 const res = await scanner.scan({ target: "https://site.local/?q=1" });
 ```
+
+### 8) UNION/ORDER BY (PoC)
+
+```ts
+// Экспериментальная техника: сначала ORDER BY (ok vs bad), затем UNION
+const res = await scanner.scan({
+  target: "http://127.0.0.1:3000/search?q=1",
+  enable: {
+    query: true,
+    union: true,
+    error: false,
+    boolean: false,
+    time: false,
+  },
+});
+
+const unionFindings = res.details.filter((d) => d.technique === "union");
+// evidence включает orderby-sim=... и/или sim(base,union)=...
+```
+
+Примечание: это PoC с консервативными, безопасными пейлоадами. В бою комбинируйте с error/boolean/time для повышения уверенности.
 
 ## Важно
 

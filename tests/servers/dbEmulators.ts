@@ -24,7 +24,8 @@ function hasTimePayload(s: string): boolean {
 }
 
 function hasErrorPayload(s: string): boolean {
-  return /['"\\)]/.test(s);
+  // Keep quotes and backslash; do not trigger on ')' to avoid User-Agent parentheses
+  return /['"\\]/.test(s);
 }
 
 function isBooleanTrue(s: string): boolean {
@@ -33,6 +34,18 @@ function isBooleanTrue(s: string): boolean {
 
 function isBooleanFalse(s: string): boolean {
   return /(1\s*AND\s*1=2)|('\s*OR\s*1=2(--|\s|$))/.test(s);
+}
+
+function isOrderByProbeOk(s: string): boolean {
+  return /ORDER\s+BY\s+1(\s|$)/i.test(s);
+}
+
+function isOrderByProbeBad(s: string): boolean {
+  return /ORDER\s+BY\s+999(\s|$)/i.test(s);
+}
+
+function isUnionSelect(s: string): boolean {
+  return /UNION\s+SELECT/i.test(s);
 }
 
 function anyStringValue(obj: any): string[] {
@@ -112,6 +125,50 @@ export async function startDbEmulator(kind: DbKind): Promise<{
         res.end(
           "<!doctype html><html><head><title>OK</title></head><body><div>no results</div></body></html>"
         );
+        return;
+      }
+
+      // ORDER BY handling: detect ORDER BY <num> and simulate boundary at 3 columns
+      const orderByMatch = haystack.match(/ORDER\s+BY\s+(\d+)/i);
+      if (orderByMatch) {
+        const idx = parseInt(orderByMatch[1], 10);
+        const maxCols = 3;
+        res.writeHead(200, { "content-type": "text/html" });
+        if (idx <= maxCols) {
+          const body = `<!doctype html><html><head><title>OK</title></head><body><div class=\"list\">sorted_${idx}</div></body></html>`;
+          res.end(body);
+        } else {
+          const filler = "x".repeat(200 + Math.min(800, idx));
+          const body = `<!doctype html><html><head><title>OK</title></head><body><div class=\"list\">order mismatch ${filler}</div></body></html>`;
+          res.end(body);
+        }
+        return;
+      }
+
+      // UNION SELECT handling: count columns; only if matches maxCols produce obvious union rows
+      if (isUnionSelect(haystack)) {
+        const maxCols = 3;
+        // naive count: take substring after UNION SELECT and count commas at top level
+        const idx = haystack.toUpperCase().indexOf("UNION SELECT");
+        let tail = haystack.substring(idx + "UNION SELECT".length);
+        // strip trailing comment/end
+        tail = tail.split(/\r?\n|;|\bWHERE\b|\bORDER\b/i)[0] || tail;
+        const colCount = tail.split(",").length; // naive but enough for tests
+        if (colCount === maxCols) {
+          res.writeHead(200, { "content-type": "text/html" });
+          const rows = Array.from(
+            { length: 10 },
+            (_, i) => `<li>union_row_${i}</li>`
+          ).join("");
+          const body = `<!doctype html><html><head><title>OK</title></head><body><h1>UNION_MARK</h1><ul>${rows}</ul></body></html>`;
+          res.end(body);
+        } else {
+          // wrong columns: behave like baseline
+          res.writeHead(200, { "content-type": "text/html" });
+          res.end(
+            `<!doctype html><html><head><title>Base</title></head><body><p>path=${url.pathname}</p></body></html>`
+          );
+        }
         return;
       }
 

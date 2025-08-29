@@ -16,6 +16,8 @@ import {
   errorPayloads,
   booleanPairs,
   timePayloads,
+  unionPayloads,
+  orderByProbes,
   hasSqlError,
   clip,
   similaritySignal,
@@ -97,10 +99,13 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
   const errs = input.payloads?.error ?? errorPayloads;
   const pairs = input.payloads?.boolean ?? booleanPairs;
   const times = input.payloads?.time ?? timePayloads;
+  const unions = input.payloads?.union ?? unionPayloads;
+  const orderbys = input.payloads?.orderBy ?? orderByProbes;
   const perPoint =
     (enable.error ?? true ? errs.length : 0) +
     (enable.boolean ?? true ? pairs.length : 0) +
-    (enable.time ?? true ? times.length : 0);
+    (enable.time ?? true ? times.length : 0) +
+    (enable.union ?? false ? unions.length + orderbys.length : 0);
   const plannedChecks = perPoint * points.length;
   let processed = 0;
   const tStart = Date.now();
@@ -232,6 +237,120 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
             });
             if (vuln) break;
             await sleep(jitter());
+          }
+        }
+
+        // union-based: infer column count via ORDER BY and craft UNION SELECT
+        if (enable.union ?? false) {
+          // Optional: use previous DB fingerprint if needed later
+          const knownDb = details
+            .filter((d) => d.technique === "error" && d.vulnerable)
+            .flatMap((d) => d.confirmations || [])
+            .find((c) =>
+              ["mysql", "postgres", "mssql", "oracle", "sqlite"].includes(c)
+            );
+
+          // Infer column count by increasing ORDER BY index until response stops changing
+          const maxTry = 8;
+          let columnCount: number | null = null;
+          for (let n = 1; n <= maxTry; n++) {
+            const okPayload = ` ORDER BY ${n}`;
+            const badPayload = ` ORDER BY ${n + 10}`;
+            const resOk = await sendWithInjection(
+              client,
+              input,
+              point,
+              okPayload,
+              forms
+            );
+            const resBad = await sendWithInjection(
+              client,
+              input,
+              point,
+              badPayload,
+              forms
+            );
+            const a = bodyToText(resOk);
+            const b = bodyToText(resBad);
+            const sim = similaritySignal(a, b);
+            const lenDiff =
+              Math.abs(a.length - b.length) / Math.max(a.length, b.length, 1);
+            const statusOk = resOk.status < 500 && resBad.status < 500;
+            const changed = statusOk && (sim < 0.995 || lenDiff > 0.01);
+            details.push({
+              point,
+              payload: `${okPayload} | ${badPayload}`,
+              technique: "union",
+              vulnerable: changed,
+              responseMeta: { status: resOk.status, len: a.length },
+              evidence: changed ? `orderby-sim=${sim.toFixed(2)}` : undefined,
+            });
+            processed++;
+            const avg = (Date.now() - tStart) / Math.max(1, processed);
+            const eta =
+              plannedChecks > 0
+                ? Math.max(0, Math.round(avg * (plannedChecks - processed)))
+                : undefined;
+            report?.({
+              kind: "scan",
+              phase: "scan",
+              plannedChecks,
+              processedChecks: processed,
+              etaMs: eta,
+            });
+            if (changed) columnCount = n;
+            else break;
+            await sleep(jitter());
+          }
+
+          if (columnCount && columnCount >= 1) {
+            const cols = Array.from({ length: columnCount }, () => "NULL").join(
+              ","
+            );
+            const unionPayload = ` UNION SELECT ${cols}`;
+            const resU = await sendWithInjection(
+              client,
+              input,
+              point,
+              unionPayload,
+              forms
+            );
+            const txt = bodyToText(resU);
+            const simToBase = similaritySignal(baseText, txt);
+            const lenDeltaBase =
+              Math.abs(baseText.length - txt.length) /
+              Math.max(baseText.length, txt.length, 1);
+            const noSqlErr = !hasSqlError(txt);
+            const diff = simToBase < 0.995 || lenDeltaBase > 0.01;
+            const vuln = noSqlErr && diff;
+            details.push({
+              point,
+              payload: unionPayload,
+              technique: "union",
+              vulnerable: vuln,
+              responseMeta: { status: resU.status, len: txt.length },
+              evidence: vuln
+                ? `sim(base,union)=${simToBase.toFixed(2)}`
+                : undefined,
+              confirmations: vuln
+                ? (["union_select_nulls", knownDb || "unknown"].filter(
+                    Boolean
+                  ) as string[])
+                : undefined,
+            });
+            processed++;
+            const avg = (Date.now() - tStart) / Math.max(1, processed);
+            const eta =
+              plannedChecks > 0
+                ? Math.max(0, Math.round(avg * (plannedChecks - processed)))
+                : undefined;
+            report?.({
+              kind: "scan",
+              phase: "scan",
+              plannedChecks,
+              processedChecks: processed,
+              etaMs: eta,
+            });
           }
         }
 

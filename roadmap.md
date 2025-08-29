@@ -18,6 +18,8 @@
 - [x] Time-based + статистическая проверка. (p-value подтверждение)
 - [x] Error-based (сигнатуры ошибок).
 - [ ] Union-based (подбор колонок/типов).
+  - [x] PoC: ORDER BY diff + базовые UNION SELECT, приоритизация по отпечатку СУБД
+  - [x] PoC: ORDER BY сигнал + базовый UNION SELECT (безопасные payload), DB-aware приоритезация.
 - [x] Фингерпринтинг СУБД. (базовый по текстам ошибок/пейлоадам)
 - [x] Поддержка MySQL, PostgreSQL, MSSQL, Oracle, SQLite. (уровень детекта/отпечатков и эмуляторов)
 

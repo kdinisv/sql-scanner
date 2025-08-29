@@ -48,12 +48,23 @@ export type ScanInput = {
   parallel?: number;
   maxRequests?: number;
   enable: Partial<
-    Record<InjectionKind | "error" | "boolean" | "time", boolean>
+    Record<InjectionKind | "error" | "boolean" | "time" | "union", boolean>
   >;
   payloads?: {
     error?: string[];
     boolean?: Array<{ true: string; false: string; label?: string }>;
     time?: Array<{ p: string; label?: string }>;
+    union?: Array<{
+      p: string;
+      label?: string;
+      db?: "mysql" | "postgres" | "mssql" | "oracle" | "sqlite" | "any";
+    }>;
+    orderBy?: Array<{
+      ok: string;
+      bad: string;
+      label?: string;
+      db?: "mysql" | "postgres" | "mssql" | "oracle" | "sqlite" | "any";
+    }>;
   };
   onProgress?: (p: ScanProgress) => void;
 };
@@ -61,7 +72,7 @@ export type ScanInput = {
 export type Detail = {
   point: InjectionPoint;
   payload: string;
-  technique: "error" | "boolean_truefalse" | "time";
+  technique: "error" | "boolean_truefalse" | "time" | "union";
   vulnerable: boolean;
   responseMeta?: {
     status: number;
