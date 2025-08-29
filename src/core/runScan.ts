@@ -29,6 +29,7 @@ import {
   pairedZTestPValue,
   detectDbFingerprint,
 } from "../utils.js";
+import { buildCurlExample } from "../utils.js";
 
 export async function runScan(input: ScanInput): Promise<ResultShape> {
   const {
@@ -134,6 +135,7 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
             const text = bodyToText(res);
             const isErr = hasSqlError(text);
             const fp = isErr ? detectDbFingerprint(text) : "unknown";
+            const reproduceCurl = buildCurlExample(input, point, p, forms);
             details.push({
               point,
               payload: p,
@@ -147,6 +149,15 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
               },
               evidence: isErr ? clip(text) : undefined,
               confirmations: isErr ? ["error_signature", fp] : undefined,
+              reproduce: { curl: [reproduceCurl] },
+              remediation: isErr
+                ? [
+                    "Используйте параметризованные запросы/Prepared Statements",
+                    "Не конкатенируйте пользовательский ввод в SQL",
+                    "Включите минимально необходимые привилегии для DB user",
+                    "Фильтруйте/экранируйте опасные символы по контексту",
+                  ]
+                : undefined,
             });
             processed++;
             const avg = (Date.now() - tStart) / Math.max(1, processed);
@@ -203,6 +214,18 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
               bothOk &&
               ((simTF < 0.6 && Math.abs(simBaseT - simBaseF) > 0.25) ||
                 jsonSignal);
+            const reproduceCurlTrue = buildCurlExample(
+              input,
+              point,
+              pair.true,
+              forms
+            );
+            const reproduceCurlFalse = buildCurlExample(
+              input,
+              point,
+              pair.false,
+              forms
+            );
             details.push({
               point,
               payload: `${pair.true} | ${pair.false}`,
@@ -221,6 +244,14 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
                   )} sim(true,false)=${simTF.toFixed(2)}`
                 : undefined,
               confirmations: vuln && pair.label ? [pair.label] : undefined,
+              reproduce: { curl: [reproduceCurlTrue, reproduceCurlFalse] },
+              remediation: vuln
+                ? [
+                    "Применяйте параметризованные запросы/ORM",
+                    "Не используйте динамический SQL из пользовательских строк",
+                    "Добавьте строгую валидацию и whitelisting параметров",
+                  ]
+                : undefined,
             });
             processed++;
             const avg = (Date.now() - tStart) / Math.max(1, processed);
@@ -284,6 +315,19 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
               vulnerable: changed,
               responseMeta: { status: resOk.status, len: a.length },
               evidence: changed ? `orderby-sim=${sim.toFixed(2)}` : undefined,
+              reproduce: {
+                curl: [
+                  buildCurlExample(input, point, okPayload, forms),
+                  buildCurlExample(input, point, badPayload, forms),
+                ],
+              },
+              remediation: changed
+                ? [
+                    "Всегда используйте параметризованные запросы",
+                    "Отключите отображение ошибок SQL пользователю",
+                    "Ограничьте права DB-пользователя (принцип наименьших привилегий)",
+                  ]
+                : undefined,
             });
             processed++;
             const avg = (Date.now() - tStart) / Math.max(1, processed);
@@ -336,6 +380,16 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
                 ? (["union_select_nulls", knownDb || "unknown"].filter(
                     Boolean
                   ) as string[])
+                : undefined,
+              reproduce: {
+                curl: [buildCurlExample(input, point, unionPayload, forms)],
+              },
+              remediation: vuln
+                ? [
+                    "Используйте параметризованные запросы",
+                    "Не вставляйте напрямую пользовательский ввод в SELECT/ORDER BY",
+                    "Добавьте серверную валидацию допустимых значений (white-list)",
+                  ]
                 : undefined,
             });
             processed++;
@@ -462,6 +516,14 @@ export async function runScan(input: ScanInput): Promise<ResultShape> {
                   : vuln
                   ? ["time_pvalue"]
                   : undefined,
+              reproduce: { curl: [buildCurlExample(input, point, t.p, forms)] },
+              remediation: vuln
+                ? [
+                    "Переход на параметризованные запросы/хранимые процедуры без конкатенации",
+                    "Нормализация входных данных и строгие типы",
+                    "Web Application Firewall (WAF) как дополнительный слой",
+                  ]
+                : undefined,
             });
 
             if (vuln) break;

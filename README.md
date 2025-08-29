@@ -91,6 +91,8 @@ console.log(smart.crawledPages, smart.candidates.length, smart.sqli.length);
   - responseMeta?: { status: number; elapsedMs?: number; len?: number; location?: string }
   - evidence?: string — краткая улика (фрагмент ошибки/метрика)
   - confirmations?: string[] — ярлыки подтверждений (например, "error_signature", а при error-based может добавляться отпечаток СУБД: "mysql"|"postgres"|"mssql"|"oracle"|"sqlite")
+  - reproduce?: { curl: string[]; note?: string } — готовые примеры для воспроизведения (curl)
+  - remediation?: string[] — краткие рекомендации по исправлению
 
 Пример:
 
@@ -105,7 +107,14 @@ console.log(smart.crawledPages, smart.candidates.length, smart.sqli.length);
       "vulnerable": true,
       "responseMeta": { "status": 200, "len": 12345, "elapsedMs": 120 },
       "evidence": "You have an error in your SQL syntax",
-      "confirmations": ["error_signature"]
+      "confirmations": ["error_signature"],
+      "reproduce": {
+        "curl": ["curl \"https://example.com/search?q=' OR '1'='1\""]
+      },
+      "remediation": [
+        "Используйте параметризованные запросы/Prepared Statements",
+        "Не конкатенируйте пользовательский ввод в SQL"
+      ]
     }
   ]
 }
@@ -421,6 +430,12 @@ const csv = toCsvReport(result);
 const junitXml = toJUnitReport(result);
 // Сохраните в файл или отправьте в CI-артефакты
 ```
+
+В отчётах теперь присутствуют примеры воспроизведения и советы по исправлению:
+
+- Markdown: внутри каждого найденного пункта добавляется раздел `reproduce` с `curl ...`, а также `remediation` — список рекомендаций.
+- CSV: дополнительные колонки `reproduce_curl` и `remediation`.
+- JUnit: в `<failure>` попадает тело с блоками `curl:` и `fix:`.
 
 ### 7) Управление нагрузкой
 

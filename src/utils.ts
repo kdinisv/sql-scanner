@@ -752,3 +752,119 @@ export async function sendWithInjection(
 
   return client.request(config);
 }
+
+// Build a reproducible curl example for the same injection we send
+export function buildCurlExample(
+  input: ScanInput,
+  point: InjectionPoint,
+  payload: string,
+  forms: Record<string, any>[]
+): string {
+  const url = new NodeURL(input.target);
+
+  let method = input.method || "GET";
+  let finalUrl = input.target;
+  const headers: Record<string, string> = { ...(input.headers || {}) };
+  let dataRaw: string | undefined = undefined;
+  let contentType: string | undefined = undefined;
+  let cookiesHeader: string | undefined = undefined;
+
+  // seed cookies
+  if (input.cookies) {
+    const cookieString = Object.entries(input.cookies)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("; ");
+    cookiesHeader = cookieString;
+  }
+
+  function setCookiePair(name: string, value: string) {
+    const current = cookiesHeader ? cookiesHeader.split(/;\s*/) : [];
+    const filtered = current.filter((c) => !c.startsWith(name + "="));
+    filtered.push(`${name}=${value}`);
+    cookiesHeader = filtered.join("; ");
+  }
+
+  switch (point.kind) {
+    case "query": {
+      url.searchParams.set(point.name, payload);
+      finalUrl = url.toString();
+      break;
+    }
+    case "path": {
+      if (point.meta?.position !== undefined) {
+        const segments = url.pathname.split("/").filter(Boolean);
+        segments[point.meta.position as number] = encodeURIComponent(payload);
+        url.pathname = "/" + segments.join("/");
+        finalUrl = url.toString();
+      }
+      break;
+    }
+    case "form": {
+      method = "POST";
+      const params = new URLSearchParams();
+      const matchingForm = forms.find(
+        (f) =>
+          f.action === input.target ||
+          (f.meta && f.meta.action === input.target)
+      );
+      if (matchingForm && matchingForm.fields) {
+        for (const field of matchingForm.fields) {
+          const value = field.name === point.name ? payload : field.value;
+          params.append(field.name, value);
+        }
+      } else {
+        params.append(point.name, payload);
+      }
+      dataRaw = params.toString();
+      contentType = "application/x-www-form-urlencoded";
+      break;
+    }
+    case "json": {
+      if (input.jsonBody) {
+        const jsonCopy = JSON.parse(JSON.stringify(input.jsonBody));
+        const pathParts = point.name.split(".");
+        let current: any = jsonCopy;
+        for (let i = 0; i < pathParts.length - 1; i++) {
+          if (!current[pathParts[i]]) current[pathParts[i]] = {};
+          current = current[pathParts[i]];
+        }
+        current[pathParts[pathParts.length - 1]] = payload;
+        dataRaw = JSON.stringify(jsonCopy);
+        contentType = "application/json";
+      }
+      break;
+    }
+    case "header": {
+      headers[point.name] = payload;
+      break;
+    }
+    case "cookie": {
+      setCookiePair(point.name, payload);
+      break;
+    }
+  }
+
+  const parts: string[] = ["curl"];
+  if (method && method.toUpperCase() !== "GET")
+    parts.push("-X", method.toUpperCase());
+  parts.push('"' + finalUrl + '"');
+
+  // headers
+  const mergedHeaders: Record<string, string> = { ...headers };
+  if (contentType) mergedHeaders["Content-Type"] = contentType;
+  if (cookiesHeader && cookiesHeader.trim())
+    mergedHeaders["Cookie"] = cookiesHeader;
+  for (const [k, v] of Object.entries(mergedHeaders)) {
+    parts.push("-H", '"' + k + ": " + escapeDoubleQuotes(v) + '"');
+  }
+
+  if (dataRaw !== undefined) {
+    parts.push("--data-raw", '"' + escapeDoubleQuotes(dataRaw) + '"');
+  }
+
+  return parts.join(" ");
+}
+
+function escapeDoubleQuotes(s: string): string {
+  return String(s).replaceAll('"', '\\"');
+}

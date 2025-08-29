@@ -82,6 +82,15 @@ export type Detail = {
   };
   evidence?: string;
   confirmations?: string[];
+  /** Примеры воспроизведения запроса (например, curl) */
+  reproduce?: {
+    /** Один или несколько готовых curl-примеров */
+    curl: string[];
+    /** Короткое описание, если нужно */
+    note?: string;
+  };
+  /** Рекомендации по исправлению (best practices) */
+  remediation?: string[];
 };
 
 export type ResultShape = { vulnerable: boolean; details: Detail[] };

@@ -29,6 +29,14 @@ export function toMarkdownReport(result: ResultShape): string {
       if (d.responseMeta?.len !== undefined)
         lines.push(`- len: ${d.responseMeta.len}`);
       if (d.evidence) lines.push(`- evidence: ${d.evidence}`);
+      if (d.reproduce?.curl?.length) {
+        lines.push("- reproduce:");
+        d.reproduce.curl.forEach((c) => lines.push(`  - curl: ${c}`));
+      }
+      if (d.remediation?.length) {
+        lines.push("- remediation:");
+        d.remediation.forEach((r) => lines.push(`  - ${r}`));
+      }
       lines.push("");
     });
   }
@@ -47,6 +55,8 @@ export function toCsvReport(result: ResultShape): string {
       "elapsedMs",
       "len",
       "confirmations",
+      "reproduce_curl",
+      "remediation",
     ].join(",")
   );
   for (const d of result.details) {
@@ -59,6 +69,8 @@ export function toCsvReport(result: ResultShape): string {
       String(d.responseMeta?.elapsedMs ?? ""),
       String(d.responseMeta?.len ?? ""),
       (d.confirmations || []).join("; "),
+      (d.reproduce?.curl || []).join(" | "),
+      (d.remediation || []).join(" | "),
     ];
     rows.push(values.map(csvEscape).join(","));
   }
@@ -89,8 +101,17 @@ export function toJUnitReport(result: ResultShape): string {
       if (d.vulnerable) {
         const msg = d.confirmations?.join(", ") || "vulnerability";
         const evid = d.evidence || "";
+        const repro = (d.reproduce?.curl || []).join("\n");
+        const remediation = (d.remediation || []).join("\n");
+        const body = [
+          evid,
+          repro ? `curl:\n${repro}` : "",
+          remediation ? `fix:\n${remediation}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n");
         xml += `\n    <failure message="${escapeXml(msg)}">${escapeXml(
-          evid
+          body
         )}</failure>\n  `;
       }
       xml += `</testcase>\n`;
